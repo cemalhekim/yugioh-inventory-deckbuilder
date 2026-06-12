@@ -112,6 +112,7 @@
 .file-actions,
 .row-actions,
 .zone-toggle,
+.inventory-tools,
 .search-tools,
 .set-tools {
   display: flex;
@@ -275,6 +276,7 @@ button:disabled {
 }
 
 .zone-toggle,
+.inventory-tools,
 .search-tools,
 .set-tools,
 .sync-controls {
@@ -285,6 +287,11 @@ button:disabled {
 .search-tools {
   align-items: center;
   justify-content: space-between;
+}
+
+.inventory-tools {
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .search-tools label {
@@ -623,17 +630,9 @@ button:disabled {
   width: 32px;
 }
 
-.inventory-panel,
 .missing-panel {
   grid-column: 3;
-}
-
-.inventory-panel {
   grid-row: 1;
-}
-
-.missing-panel {
-  grid-row: 2;
 }
 
 .cardmarket-prep {
@@ -824,7 +823,6 @@ button:disabled {
   .search-panel,
   .deck-panel,
   .kaiba-panel,
-  .inventory-panel,
   .missing-panel {
     grid-column: auto;
     grid-row: auto;

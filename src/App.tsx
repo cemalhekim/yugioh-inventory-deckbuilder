@@ -4,6 +4,7 @@ import './App.css'
 
 type DeckZone = 'main' | 'extra' | 'side'
 type DeckViewMode = 'list' | 'cards'
+type SearchPanelView = 'search' | 'inventory'
 
 type YgoCard = {
   id: number
@@ -309,6 +310,7 @@ function App() {
   const [deck, setDeck] = useState<DeckState>(initialState.deck)
   const [deckName, setDeckName] = useState(initialState.deckName)
   const [deckViewMode, setDeckViewMode] = useState<DeckViewMode>('cards')
+  const [searchPanelView, setSearchPanelView] = useState<SearchPanelView>('search')
   const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
@@ -908,70 +910,127 @@ function App() {
       <section className="workspace-grid">
         <section className="panel search-panel">
           <div className="panel-heading">
-            <h2>Card Search</h2>
-            <p>{status}</p>
-          </div>
-          <input
-            className="search-input"
-            value={query}
-            onChange={(event) => updateQuery(event.target.value)}
-            placeholder="Search by card name"
-          />
-          <div className="search-tools">
-            <button type="button" onClick={() => void listAllCards()} disabled={isSearching}>
-              List All
-            </button>
-            <label>
-              <input
-                type="checkbox"
-                checked={onlyInventoryResults}
-                onChange={(event) => setOnlyInventoryResults(event.target.checked)}
-              />
-              Only inventory
-            </label>
-          </div>
-          <div className="zone-toggle" aria-label="Target deck zone">
-            {zoneOrder.map((zone) => (
+            <div>
+              <h2>{searchPanelView === 'search' ? 'Card Search' : 'Inventory'}</h2>
+              <p>{status}</p>
+            </div>
+            <div className="view-toggle" aria-label="Search panel view">
               <button
-                key={zone}
-                className={activeZone === zone ? 'active' : ''}
+                className={searchPanelView === 'search' ? 'active' : ''}
                 type="button"
-                onClick={() => setActiveZone(zone)}
+                onClick={() => setSearchPanelView('search')}
               >
-                {zoneLabels[zone]}
+                Search
               </button>
-            ))}
+              <button
+                className={searchPanelView === 'inventory' ? 'active' : ''}
+                type="button"
+                onClick={() => setSearchPanelView('inventory')}
+              >
+                Inventory
+              </button>
+            </div>
           </div>
-          <div className="result-list">
-            {isSearching ? <p className="muted">Searching...</p> : null}
-            {onlyInventoryResults && results.length && !visibleResults.length ? (
-              <p className="empty-state">No listed cards are in your inventory.</p>
-            ) : null}
-            {visibleResults.map((card) => (
-              <article className="card-result" key={card.id}>
-                <img
-                  src={card.card_images?.[0]?.image_url_small}
-                  alt=""
-                  onClick={() => setPreviewCard(card)}
-                />
-                <div className="clickable-card-text" onClick={() => setPreviewCard(card)}>
-                  <strong>{card.name}</strong>
-                  <span>
-                    {card.type}
-                    {onlyInventoryResults ? ` - owned ${inventoryById.get(card.id) ?? 0}` : ''}
-                  </span>
-                </div>
-                <div className="row-actions">
-                  <button type="button" onClick={() => addToInventory(card)}>
-                    + Inv
+          {searchPanelView === 'search' ? (
+            <>
+              <input
+                className="search-input"
+                value={query}
+                onChange={(event) => updateQuery(event.target.value)}
+                placeholder="Search by card name"
+              />
+              <div className="search-tools">
+                <button type="button" onClick={() => void listAllCards()} disabled={isSearching}>
+                  List All
+                </button>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={onlyInventoryResults}
+                    onChange={(event) => setOnlyInventoryResults(event.target.checked)}
+                  />
+                  Only inventory
+                </label>
+              </div>
+              <div className="zone-toggle" aria-label="Target deck zone">
+                {zoneOrder.map((zone) => (
+                  <button
+                    key={zone}
+                    className={activeZone === zone ? 'active' : ''}
+                    type="button"
+                    onClick={() => setActiveZone(zone)}
+                  >
+                    {zoneLabels[zone]}
                   </button>
-                  <button type="button" onClick={() => addToDeck(card)}>
-                    + Deck
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
+                ))}
+              </div>
+              <div className="result-list">
+                {isSearching ? <p className="muted">Searching...</p> : null}
+                {onlyInventoryResults && results.length && !visibleResults.length ? (
+                  <p className="empty-state">No listed cards are in your inventory.</p>
+                ) : null}
+                {visibleResults.map((card) => (
+                  <article className="card-result" key={card.id}>
+                    <img
+                      src={card.card_images?.[0]?.image_url_small}
+                      alt=""
+                      onClick={() => setPreviewCard(card)}
+                    />
+                    <div className="clickable-card-text" onClick={() => setPreviewCard(card)}>
+                      <strong>{card.name}</strong>
+                      <span>
+                        {card.type}
+                        {onlyInventoryResults
+                          ? ` - owned ${inventoryById.get(card.id) ?? 0}`
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="row-actions">
+                      <button type="button" onClick={() => addToInventory(card)}>
+                        + Inv
+                      </button>
+                      <button type="button" onClick={() => addToDeck(card)}>
+                        + Deck
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="inventory-tools">
+                <button type="button" onClick={() => void saveRepoBackup()}>
+                  Save Repo
+                </button>
+                <button type="button" onClick={exportBackup}>Backup JSON</button>
+                <label className="file-button">
+                  Restore
+                  <input type="file" accept="application/json" onChange={importBackup} hidden />
+                </label>
+              </div>
+              <div className="inventory-list">
+                {inventory.length ? (
+                  inventory.map((entry) => (
+                    <div className="line-item inventory-item" key={entry.card.id}>
+                      <span>{entry.quantity}x</span>
+                      <strong onClick={() => setPreviewCard(entry.card)}>
+                        {entry.card.name}
+                      </strong>
+                      <button type="button" onClick={() => addToInventory(entry.card, 1)}>
+                        +
+                      </button>
+                      <button type="button" onClick={() => addToInventory(entry.card, -1)}>
+                        -
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="empty-state">Add cards from search results.</p>
+                )}
+              </div>
+            </>
+          )}
         </section>
 
         <section className="panel sets-panel">
@@ -1224,42 +1283,6 @@ function App() {
               ))
             ) : (
               <p className="empty-state">Refresh to list KaibaPro decks.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="panel inventory-panel">
-          <div className="panel-heading">
-            <h2>Inventory</h2>
-            <div className="file-actions">
-              <button type="button" onClick={() => void saveRepoBackup()}>
-                Save Repo
-              </button>
-              <button type="button" onClick={exportBackup}>Backup JSON</button>
-              <label className="file-button">
-                Restore
-                <input type="file" accept="application/json" onChange={importBackup} hidden />
-              </label>
-            </div>
-          </div>
-          <div className="inventory-list">
-            {inventory.length ? (
-              inventory.map((entry) => (
-                <div className="line-item inventory-item" key={entry.card.id}>
-                  <span>{entry.quantity}x</span>
-                  <strong onClick={() => setPreviewCard(entry.card)}>
-                    {entry.card.name}
-                  </strong>
-                  <button type="button" onClick={() => addToInventory(entry.card, 1)}>
-                    +
-                  </button>
-                  <button type="button" onClick={() => addToInventory(entry.card, -1)}>
-                    -
-                  </button>
-                </div>
-              ))
-            ) : (
-              <p className="empty-state">Add cards from search results.</p>
             )}
           </div>
         </section>
