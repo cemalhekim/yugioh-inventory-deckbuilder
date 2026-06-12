@@ -478,6 +478,13 @@ button:disabled {
   width: 46px;
 }
 
+.card-result img,
+.deck-card img,
+.clickable-card-text,
+.line-item strong {
+  cursor: zoom-in;
+}
+
 .card-result strong,
 .line-item strong {
   color: var(--kc-ice);
@@ -692,6 +699,57 @@ button:disabled {
   font-size: 14px;
   margin: 0;
   padding: 16px;
+}
+
+.card-preview-backdrop {
+  align-items: center;
+  background: rgba(1, 5, 12, 0.82);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 20;
+}
+
+.card-preview {
+  background: linear-gradient(145deg, rgba(8, 20, 38, 0.98), rgba(13, 38, 70, 0.98));
+  border: 1px solid var(--kc-line-strong);
+  border-radius: 8px;
+  box-shadow: 0 0 42px rgba(57, 200, 255, 0.34);
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 48px);
+  max-width: min(520px, calc(100vw - 48px));
+  overflow: auto;
+  padding: 14px;
+  position: relative;
+  width: 100%;
+}
+
+.card-preview img {
+  border: 1px solid rgba(150, 225, 255, 0.45);
+  border-radius: 6px;
+  display: block;
+  justify-self: center;
+  max-height: 72vh;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.card-preview h2 {
+  color: var(--kc-ice);
+  font-size: 20px;
+  margin: 0;
+}
+
+.card-preview p {
+  color: var(--kc-muted);
+  margin: 4px 0 0;
+}
+
+.card-preview-close {
+  justify-self: end;
 }
 
 @media (max-width: 1180px) {

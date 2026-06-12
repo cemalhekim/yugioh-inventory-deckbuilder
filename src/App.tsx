@@ -274,7 +274,8 @@ function App() {
   )
   const [deck, setDeck] = useState<DeckState>(initialState.deck)
   const [deckName, setDeckName] = useState(initialState.deckName)
-  const [deckViewMode, setDeckViewMode] = useState<DeckViewMode>('list')
+  const [deckViewMode, setDeckViewMode] = useState<DeckViewMode>('cards')
+  const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
   const [activeZone, setActiveZone] = useState<DeckZone>('main')
@@ -745,8 +746,12 @@ function App() {
             {isSearching ? <p className="muted">Searching...</p> : null}
             {results.map((card) => (
               <article className="card-result" key={card.id}>
-                <img src={card.card_images?.[0]?.image_url_small} alt="" />
-                <div>
+                <img
+                  src={card.card_images?.[0]?.image_url_small}
+                  alt=""
+                  onClick={() => setPreviewCard(card)}
+                />
+                <div className="clickable-card-text" onClick={() => setPreviewCard(card)}>
                   <strong>{card.name}</strong>
                   <span>{card.type}</span>
                 </div>
@@ -836,7 +841,7 @@ function App() {
               {selectedSetCards.map((card) => (
                 <div className="line-item set-card-item" key={card.id}>
                   <span>{inventoryById.get(card.id) ?? 0}x</span>
-                  <strong>{card.name}</strong>
+                  <strong onClick={() => setPreviewCard(card)}>{card.name}</strong>
                   <small>{card.type}</small>
                   <button type="button" onClick={() => addToInventory(card)}>
                     +
@@ -908,6 +913,7 @@ function App() {
                             src={entry.card.card_images?.[0]?.image_url_small}
                             alt={entry.card.name}
                             title="Right-click to remove one. Middle-click to add one."
+                            onClick={() => setPreviewCard(entry.card)}
                             onContextMenu={(event) => {
                               event.preventDefault()
                               updateDeckCard(zone, entry.card, -1)
@@ -935,7 +941,9 @@ function App() {
                     deck[zone].map((entry) => (
                       <div className="line-item" key={entry.card.id}>
                         <span>{entry.quantity}x</span>
-                        <strong>{entry.card.name}</strong>
+                        <strong onClick={() => setPreviewCard(entry.card)}>
+                          {entry.card.name}
+                        </strong>
                         <small>
                           owned {inventoryById.get(entry.card.id) ?? 0}
                         </small>
@@ -1032,7 +1040,9 @@ function App() {
               inventory.map((entry) => (
                 <div className="line-item inventory-item" key={entry.card.id}>
                   <span>{entry.quantity}x</span>
-                  <strong>{entry.card.name}</strong>
+                  <strong onClick={() => setPreviewCard(entry.card)}>
+                    {entry.card.name}
+                  </strong>
                   <button type="button" onClick={() => addToInventory(entry.card, 1)}>
                     +
                   </button>
@@ -1077,6 +1087,38 @@ function App() {
           />
         </section>
       </section>
+
+      {previewCard ? (
+        <div
+          className="card-preview-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={previewCard.name}
+          onClick={() => setPreviewCard(null)}
+        >
+          <div className="card-preview" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="card-preview-close"
+              type="button"
+              onClick={() => setPreviewCard(null)}
+              aria-label="Close card preview"
+            >
+              Close
+            </button>
+            <img
+              src={
+                previewCard.card_images?.[0]?.image_url_cropped ??
+                previewCard.card_images?.[0]?.image_url_small
+              }
+              alt={previewCard.name}
+            />
+            <div>
+              <h2>{previewCard.name}</h2>
+              <p>{previewCard.type}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }
