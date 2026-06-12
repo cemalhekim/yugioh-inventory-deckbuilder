@@ -718,28 +718,46 @@ button:disabled {
   border-radius: 8px;
   box-shadow: 0 0 42px rgba(57, 200, 255, 0.34);
   display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(280px, 1fr);
   gap: 14px;
   max-height: calc(100vh - 48px);
-  max-width: min(520px, calc(100vw - 48px));
+  max-width: min(980px, calc(100vw - 48px));
   overflow: auto;
   padding: 14px;
   position: relative;
   width: 100%;
 }
 
-.card-preview img {
+.card-preview-art {
+  align-items: center;
+  background: rgba(3, 10, 20, 0.6);
   border: 1px solid rgba(150, 225, 255, 0.45);
   border-radius: 6px;
+  display: flex;
+  justify-content: center;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.card-preview-art img {
   display: block;
-  justify-self: center;
+  height: 100%;
   max-height: 72vh;
-  max-width: 100%;
-  object-fit: contain;
+  object-fit: cover;
+  width: 100%;
+}
+
+.card-preview-details {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
 }
 
 .card-preview h2 {
   color: var(--kc-ice);
-  font-size: 20px;
+  font-size: 24px;
+  line-height: 1.1;
   margin: 0;
 }
 
@@ -748,7 +766,51 @@ button:disabled {
   margin: 4px 0 0;
 }
 
+.detail-grid {
+  border: 1px solid rgba(90, 190, 255, 0.25);
+  display: grid;
+  grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
+}
+
+.detail-grid span,
+.detail-grid strong {
+  border-bottom: 1px solid rgba(90, 190, 255, 0.18);
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.detail-grid span {
+  background: rgba(57, 200, 255, 0.08);
+  color: var(--kc-muted);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.detail-grid strong {
+  color: var(--kc-ice);
+  overflow-wrap: anywhere;
+}
+
+.effect-box {
+  border: 1px solid rgba(90, 190, 255, 0.25);
+  padding: 12px;
+}
+
+.effect-box h3 {
+  color: var(--kc-cyan);
+  font-size: 13px;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.effect-box p {
+  color: var(--kc-text);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
 .card-preview-close {
+  grid-column: 1 / -1;
   justify-self: end;
 }
 
@@ -848,5 +910,13 @@ button:disabled {
 
   .deck-zone {
     min-height: 180px;
+  }
+
+  .card-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .card-preview-art {
+    min-height: 300px;
   }
 }

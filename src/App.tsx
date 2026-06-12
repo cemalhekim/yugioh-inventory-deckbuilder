@@ -12,6 +12,12 @@ type YgoCard = {
   desc: string
   race?: string
   attribute?: string
+  atk?: number
+  def?: number
+  level?: number
+  scale?: number
+  linkval?: number
+  archetype?: string
   card_images?: { image_url: string; image_url_small: string; image_url_cropped?: string }[]
 }
 
@@ -1105,13 +1111,74 @@ function App() {
             >
               Close
             </button>
-            <img
-              src={previewCard.card_images?.[0]?.image_url ?? previewCard.card_images?.[0]?.image_url_small}
-              alt={previewCard.name}
-            />
-            <div>
+            <div className="card-preview-art">
+              <img
+                src={
+                  previewCard.card_images?.[0]?.image_url_cropped ??
+                  previewCard.card_images?.[0]?.image_url ??
+                  previewCard.card_images?.[0]?.image_url_small
+                }
+                alt={previewCard.name}
+              />
+            </div>
+            <div className="card-preview-details">
               <h2>{previewCard.name}</h2>
-              <p>{previewCard.type}</p>
+              <div className="detail-grid">
+                <span>Type</span>
+                <strong>{previewCard.type}</strong>
+                {previewCard.race ? (
+                  <>
+                    <span>Subtype</span>
+                    <strong>{previewCard.race}</strong>
+                  </>
+                ) : null}
+                {previewCard.attribute ? (
+                  <>
+                    <span>Attribute</span>
+                    <strong>{previewCard.attribute}</strong>
+                  </>
+                ) : null}
+                {previewCard.level ? (
+                  <>
+                    <span>Level/Rank</span>
+                    <strong>{previewCard.level}</strong>
+                  </>
+                ) : null}
+                {previewCard.linkval ? (
+                  <>
+                    <span>Link</span>
+                    <strong>{previewCard.linkval}</strong>
+                  </>
+                ) : null}
+                {previewCard.scale ? (
+                  <>
+                    <span>Scale</span>
+                    <strong>{previewCard.scale}</strong>
+                  </>
+                ) : null}
+                {typeof previewCard.atk === 'number' ? (
+                  <>
+                    <span>ATK</span>
+                    <strong>{previewCard.atk}</strong>
+                  </>
+                ) : null}
+                {typeof previewCard.def === 'number' ? (
+                  <>
+                    <span>DEF</span>
+                    <strong>{previewCard.def}</strong>
+                  </>
+                ) : null}
+                {previewCard.archetype ? (
+                  <>
+                    <span>Archetype</span>
+                    <strong>{previewCard.archetype}</strong>
+                  </>
+                ) : null}
+              </div>
+              <section className="effect-box">
+                <h3>Effect</h3>
+                <p>{previewCard.desc}</p>
+              </section>
             </div>
           </div>
         </div>
