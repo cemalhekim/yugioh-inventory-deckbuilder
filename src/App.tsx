@@ -63,6 +63,7 @@ const zoneLabels: Record<DeckZone, string> = {
 }
 
 const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
+const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 
 function isExtraDeckCard(card: YgoCard) {
   return ['Fusion', 'Synchro', 'XYZ', 'Xyz', 'Link'].some((type) =>
@@ -199,6 +200,18 @@ function getSetKind(setName: string) {
   if (name.includes('tin')) return 'Tin'
   if (name.includes('booster') || name.includes('pack')) return 'Booster'
   return 'Other'
+}
+
+function createTimestampedName() {
+  const date = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return [
+    'YGO Missing',
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    `${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`,
+  ].join(' ')
 }
 
 function App() {
@@ -391,6 +404,18 @@ function App() {
     setStatus('Missing-card list copied for Cardmarket Wants.')
   }
 
+  function prepareCardmarketWants() {
+    const listName = createTimestampedName()
+    const list = missingEntries
+      .map((entry) => `${entry.missing}x ${entry.card.name}`)
+      .join('\n')
+    void navigator.clipboard.writeText(list)
+    window.open(cardmarketWantsUrl, '_blank', 'noopener,noreferrer')
+    setStatus(
+      `Cardmarket opened. Create a Wants list named "${listName}", then paste the copied missing cards with Add deck list.`,
+    )
+  }
+
   function downloadYdk() {
     const blob = new Blob([createYdk(deck, deckName)], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
@@ -579,6 +604,13 @@ function App() {
           <button type="button" onClick={downloadYdk}>Download YDK</button>
           <button type="button" onClick={copyMissingList} disabled={!missingEntries.length}>
             Copy Missing
+          </button>
+          <button
+            type="button"
+            onClick={prepareCardmarketWants}
+            disabled={!missingEntries.length}
+          >
+            Cardmarket Wants
           </button>
         </div>
       </header>

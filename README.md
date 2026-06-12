@@ -17,6 +17,8 @@ Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporti
 - Read, open, save, and auto-sync decks from a local KaibaPro 2 deck folder.
 - Calculate missing cards from your deck against your inventory.
 - Copy missing cards as `3x Card Name` lines for Cardmarket Wants.
+- Prepare a Cardmarket Wants workflow by opening the Wants page and copying the
+  missing-card list.
 - Backup and restore app data as JSON.
 - Persist data locally in the browser using `localStorage`.
 
@@ -62,12 +64,16 @@ npm run build
 
 ## Cardmarket Scope
 
-The MVP does not directly add cards to a Cardmarket basket. Cardmarket API access
-is restricted, so the first workflow is:
+The MVP does not directly log in to Cardmarket or add cards to a Cardmarket
+basket. Cardmarket API access is restricted, and the app should not collect or
+store Cardmarket account passwords.
+
+The supported workflow is:
 
 1. Build a deck.
-2. Copy the missing-card list.
-3. Paste it into a Cardmarket Wants list.
+2. Click Cardmarket Wants.
+3. Create a Wants list using the timestamped name shown in the status message.
+4. Paste the copied missing-card list into Add deck list.
 4. Use Cardmarket Shopping Wizard to choose sellers and add cards to cart.
 
 Future versions can add a browser extension or official Cardmarket API support if
