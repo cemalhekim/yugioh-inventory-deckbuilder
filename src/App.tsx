@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, MouseEvent } from 'react'
 import './App.css'
 
 type DeckZone = 'main' | 'extra' | 'side'
@@ -528,6 +528,17 @@ function App() {
       ...current,
       [zone]: upsertEntry(current[zone], card, delta),
     }))
+  }
+
+  function handleDeckCardMouseDown(
+    event: MouseEvent<HTMLImageElement>,
+    zone: DeckZone,
+    card: YgoCard,
+  ) {
+    if (event.button !== 1) return
+
+    event.preventDefault()
+    updateDeckCard(zone, card, 1)
   }
 
   function sortCurrentDeck() {
@@ -1098,15 +1109,13 @@ function App() {
                             src={entry.card.card_images?.[0]?.image_url_small}
                             alt={entry.card.name}
                             title="Right-click to remove one. Middle-click to add one."
+                            onMouseDown={(event) =>
+                              handleDeckCardMouseDown(event, zone, entry.card)
+                            }
                             onClick={() => setPreviewCard(entry.card)}
                             onContextMenu={(event) => {
                               event.preventDefault()
                               updateDeckCard(zone, entry.card, -1)
-                            }}
-                            onAuxClick={(event) => {
-                              if (event.button !== 1) return
-                              event.preventDefault()
-                              updateDeckCard(zone, entry.card, 1)
                             }}
                           />
                           <div>
