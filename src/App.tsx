@@ -12,7 +12,7 @@ type YgoCard = {
   desc: string
   race?: string
   attribute?: string
-  card_images?: { image_url_small: string; image_url_cropped?: string }[]
+  card_images?: { image_url: string; image_url_small: string; image_url_cropped?: string }[]
 }
 
 type YgoSet = {
@@ -1106,10 +1106,7 @@ function App() {
               Close
             </button>
             <img
-              src={
-                previewCard.card_images?.[0]?.image_url_cropped ??
-                previewCard.card_images?.[0]?.image_url_small
-              }
+              src={previewCard.card_images?.[0]?.image_url ?? previewCard.card_images?.[0]?.image_url_small}
               alt={previewCard.name}
             />
             <div>
