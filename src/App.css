@@ -143,6 +143,7 @@
 .file-actions,
 .row-actions,
 .zone-toggle,
+.search-tools,
 .set-tools {
   display: flex;
   gap: 8px;
@@ -305,10 +306,26 @@ button:disabled {
 }
 
 .zone-toggle,
+.search-tools,
 .set-tools,
 .sync-controls {
   border-bottom: 1px solid var(--kc-line);
   padding: 10px 12px;
+}
+
+.search-tools {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.search-tools label {
+  align-items: center;
+  color: var(--kc-text);
+  display: flex;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .zone-toggle button {

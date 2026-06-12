@@ -288,6 +288,7 @@ function App() {
   const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
+  const [onlyInventoryResults, setOnlyInventoryResults] = useState(false)
   const [activeZone, setActiveZone] = useState<DeckZone>('main')
   const [status, setStatus] = useState('Search for a card to start building.')
   const [isSearching, setIsSearching] = useState(false)
@@ -415,6 +416,11 @@ function App() {
   const inventoryById = useMemo(() => {
     return new Map(inventory.map((entry) => [entry.card.id, entry.quantity]))
   }, [inventory])
+
+  const visibleResults = useMemo(() => {
+    if (!onlyInventoryResults) return results
+    return results.filter((card) => (inventoryById.get(card.id) ?? 0) > 0)
+  }, [inventoryById, onlyInventoryResults, results])
 
   const deckTotals = useMemo(() => {
     const totals = new Map<number, { card: YgoCard; quantity: number }>()
@@ -649,6 +655,25 @@ function App() {
     }
   }
 
+  async function listAllCards() {
+    setQuery('')
+    setStatus('Loading all cards...')
+    setIsSearching(true)
+    try {
+      const response = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php')
+      if (!response.ok) throw new Error('Could not load all cards.')
+      const payload = (await response.json()) as { data: YgoCard[] }
+      const cards = payload.data.sort((a, b) => a.name.localeCompare(b.name))
+      setResults(cards)
+      setStatus(`Listed ${cards.length} cards.`)
+    } catch (error) {
+      setResults([])
+      setStatus(error instanceof Error ? error.message : 'List all failed.')
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
   async function openKaibaDeck(fileName: string) {
     setKaibaStatus(`Opening ${fileName}...`)
     setAutoSyncKaiba(false)
@@ -847,6 +872,19 @@ function App() {
             onChange={(event) => updateQuery(event.target.value)}
             placeholder="Search by card name"
           />
+          <div className="search-tools">
+            <button type="button" onClick={() => void listAllCards()} disabled={isSearching}>
+              List All
+            </button>
+            <label>
+              <input
+                type="checkbox"
+                checked={onlyInventoryResults}
+                onChange={(event) => setOnlyInventoryResults(event.target.checked)}
+              />
+              Only inventory
+            </label>
+          </div>
           <div className="zone-toggle" aria-label="Target deck zone">
             {zoneOrder.map((zone) => (
               <button
@@ -861,7 +899,10 @@ function App() {
           </div>
           <div className="result-list">
             {isSearching ? <p className="muted">Searching...</p> : null}
-            {results.map((card) => (
+            {onlyInventoryResults && results.length && !visibleResults.length ? (
+              <p className="empty-state">No listed cards are in your inventory.</p>
+            ) : null}
+            {visibleResults.map((card) => (
               <article className="card-result" key={card.id}>
                 <img
                   src={card.card_images?.[0]?.image_url_small}
@@ -870,7 +911,10 @@ function App() {
                 />
                 <div className="clickable-card-text" onClick={() => setPreviewCard(card)}>
                   <strong>{card.name}</strong>
-                  <span>{card.type}</span>
+                  <span>
+                    {card.type}
+                    {onlyInventoryResults ? ` - owned ${inventoryById.get(card.id) ?? 0}` : ''}
+                  </span>
                 </div>
                 <div className="row-actions">
                   <button type="button" onClick={() => addToInventory(card)}>
