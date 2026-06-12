@@ -596,9 +596,14 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">Yu-Gi-Oh! inventory and deck builder</p>
-          <h1>Build from what you own. Buy only what is missing.</h1>
+        <div className="brand-block">
+          <div className="kc-emblem" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <p className="eyebrow">KaibaCorp deck command</p>
+            <h1>Build from what you own. Buy only what is missing.</h1>
+          </div>
         </div>
         <div className="topbar-actions">
           <button type="button" onClick={downloadYdk}>Download YDK</button>
