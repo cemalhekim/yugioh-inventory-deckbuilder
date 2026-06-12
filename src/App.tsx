@@ -14,6 +14,14 @@ type YgoCard = {
   card_images?: { image_url_small: string; image_url_cropped?: string }[]
 }
 
+type YgoSet = {
+  set_name: string
+  set_code: string
+  num_of_cards: number
+  tcg_date?: string
+  set_image?: string
+}
+
 type InventoryEntry = {
   card: YgoCard
   quantity: number
@@ -176,6 +184,15 @@ async function fetchCardsByIds(ids: number[]) {
   return new Map(cards.map((card) => [card.id, card]))
 }
 
+function getSetKind(setName: string) {
+  const name = setName.toLowerCase()
+  if (name.includes('structure deck')) return 'Structure'
+  if (name.includes('starter deck') || name.includes('starter set')) return 'Starter'
+  if (name.includes('tin')) return 'Tin'
+  if (name.includes('booster') || name.includes('pack')) return 'Booster'
+  return 'Other'
+}
+
 function App() {
   const [initialState] = useState(loadState)
   const [inventory, setInventory] = useState<InventoryEntry[]>(
@@ -188,12 +205,46 @@ function App() {
   const [activeZone, setActiveZone] = useState<DeckZone>('main')
   const [status, setStatus] = useState('Search for a card to start building.')
   const [isSearching, setIsSearching] = useState(false)
+  const [sets, setSets] = useState<YgoSet[]>([])
+  const [productQuery, setProductQuery] = useState('')
+  const [setKindFilter, setSetKindFilter] = useState('All')
+  const [selectedSet, setSelectedSet] = useState<YgoSet | null>(null)
+  const [selectedSetCards, setSelectedSetCards] = useState<YgoCard[]>([])
+  const [productStatus, setProductStatus] = useState('Loading product catalog...')
+  const [isSetLoading, setIsSetLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const state: PersistedState = { inventory, deck, deckName }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }, [inventory, deck, deckName])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadSets() {
+      try {
+        const response = await fetch(
+          'https://db.ygoprodeck.com/api/v7/cardsets.php',
+          { signal: controller.signal },
+        )
+        if (!response.ok) throw new Error('Could not load product catalog.')
+        const payload = (await response.json()) as YgoSet[]
+        setSets(payload)
+        setProductStatus(`Loaded ${payload.length} sets and sealed products.`)
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setProductStatus(
+            error instanceof Error ? error.message : 'Could not load sets.',
+          )
+        }
+      }
+    }
+
+    void loadSets()
+
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -273,9 +324,34 @@ function App() {
   )
   const missingCount = missingEntries.reduce((sum, entry) => sum + entry.missing, 0)
 
+  const filteredSets = useMemo(() => {
+    const normalizedQuery = productQuery.trim().toLowerCase()
+    return sets
+      .filter((set) => {
+        const matchesKind =
+          setKindFilter === 'All' || getSetKind(set.set_name) === setKindFilter
+        const matchesQuery =
+          !normalizedQuery ||
+          set.set_name.toLowerCase().includes(normalizedQuery) ||
+          set.set_code.toLowerCase().includes(normalizedQuery)
+        return matchesKind && matchesQuery
+      })
+      .slice(0, 80)
+  }, [productQuery, setKindFilter, sets])
+
   function addToInventory(card: YgoCard, delta = 1) {
     setInventory((current) => {
       const next = upsertEntry(current, card, delta)
+      return next.sort((a, b) => a.card.name.localeCompare(b.card.name))
+    })
+  }
+
+  function addManyToInventory(cards: YgoCard[], copies = 1) {
+    setInventory((current) => {
+      let next = current
+      for (const card of cards) {
+        next = upsertEntry(next, card, copies)
+      }
       return next.sort((a, b) => a.card.name.localeCompare(b.card.name))
     })
   }
@@ -302,6 +378,29 @@ function App() {
     link.click()
     URL.revokeObjectURL(url)
     setStatus('YDK exported.')
+  }
+
+  async function loadSetCards(set: YgoSet) {
+    setSelectedSet(set)
+    setSelectedSetCards([])
+    setIsSetLoading(true)
+    setProductStatus(`Loading ${set.set_name}...`)
+
+    try {
+      const response = await fetch(
+        `https://db.ygoprodeck.com/api/v7/cardinfo.php?cardset=${encodeURIComponent(set.set_name)}`,
+      )
+      if (!response.ok) throw new Error(`No cards found for ${set.set_name}.`)
+      const payload = (await response.json()) as { data: YgoCard[] }
+      const cards = payload.data.sort((a, b) => a.name.localeCompare(b.name))
+      setSelectedSetCards(cards)
+      setProductStatus(`${set.set_name}: ${cards.length} listed cards.`)
+    } catch (error) {
+      setSelectedSetCards([])
+      setProductStatus(error instanceof Error ? error.message : 'Set load failed.')
+    } finally {
+      setIsSetLoading(false)
+    }
   }
 
   async function importYdk(event: ChangeEvent<HTMLInputElement>) {
@@ -439,6 +538,90 @@ function App() {
                 </div>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="panel sets-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Sets & Products</h2>
+              <p>{productStatus}</p>
+            </div>
+          </div>
+          <div className="set-tools">
+            <input
+              className="search-input set-search"
+              value={productQuery}
+              onChange={(event) => setProductQuery(event.target.value)}
+              placeholder="Search sets, tins, structure decks"
+            />
+            <select
+              value={setKindFilter}
+              onChange={(event) => setSetKindFilter(event.target.value)}
+              aria-label="Product type"
+            >
+              {['All', 'Structure', 'Starter', 'Booster', 'Tin', 'Other'].map(
+                (kind) => (
+                  <option key={kind} value={kind}>
+                    {kind}
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
+          <div className="set-browser">
+            <div className="set-list">
+              {filteredSets.map((set) => (
+                <button
+                  className={selectedSet?.set_name === set.set_name ? 'selected' : ''}
+                  key={`${set.set_name}-${set.set_code}`}
+                  type="button"
+                  onClick={() => void loadSetCards(set)}
+                >
+                  <strong>{set.set_name}</strong>
+                  <span>
+                    {set.set_code} · {getSetKind(set.set_name)} · {set.num_of_cards}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="set-card-list">
+              {selectedSet ? (
+                <div className="set-summary">
+                  <div>
+                    <strong>{selectedSet.set_name}</strong>
+                    <span>
+                      {selectedSet.set_code} · {selectedSet.tcg_date ?? 'date unknown'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!selectedSetCards.length}
+                    onClick={() => {
+                      addManyToInventory(selectedSetCards)
+                      setProductStatus(
+                        `Added ${selectedSetCards.length} cards from ${selectedSet.set_name}.`,
+                      )
+                    }}
+                  >
+                    Add All
+                  </button>
+                </div>
+              ) : (
+                <p className="empty-state">Select a set or sealed product.</p>
+              )}
+              {isSetLoading ? <p className="muted">Loading cards...</p> : null}
+              {selectedSetCards.map((card) => (
+                <div className="line-item set-card-item" key={card.id}>
+                  <span>{inventoryById.get(card.id) ?? 0}x</span>
+                  <strong>{card.name}</strong>
+                  <small>{card.type}</small>
+                  <button type="button" onClick={() => addToInventory(card)}>
+                    +
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

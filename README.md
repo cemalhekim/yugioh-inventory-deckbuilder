@@ -6,7 +6,10 @@ Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporti
 ## Features
 
 - Search cards from the YGOPRODeck public API.
+- Browse sets, tins, starter decks, and structure decks from YGOPRODeck.
 - Add cards to inventory with quantities.
+- Add individual cards from a selected set/product to inventory.
+- Bulk-add all listed cards from a selected set/product to inventory.
 - Build Main, Extra, and Side Deck zones.
 - Auto-route Extra Deck monsters when adding from search.
 - Import and export `.ydk` files.
@@ -14,6 +17,10 @@ Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporti
 - Copy missing cards as `3x Card Name` lines for Cardmarket Wants.
 - Backup and restore app data as JSON.
 - Persist data locally in the browser using `localStorage`.
+
+Bulk adding from sealed products adds one copy of each listed card. The
+YGOPRODeck set endpoints do not expose exact duplicate copy counts inside
+structure decks.
 
 ## Run
 
