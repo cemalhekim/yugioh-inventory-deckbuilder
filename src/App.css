@@ -636,6 +636,35 @@ button:disabled {
   grid-row: 2;
 }
 
+.cardmarket-prep {
+  align-items: end;
+  border-bottom: 1px solid var(--kc-line);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 10px 12px;
+}
+
+.cardmarket-prep label {
+  color: var(--kc-muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 5px;
+  text-transform: uppercase;
+}
+
+.cardmarket-prep input {
+  background: rgba(3, 10, 20, 0.82);
+  border: 1px solid var(--kc-line);
+  border-radius: 4px;
+  color: var(--kc-text);
+  font: inherit;
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
 .missing-panel textarea {
   background: rgba(3, 10, 20, 0.78);
   border: 0;
@@ -736,7 +765,8 @@ button:disabled {
 
   .set-tools,
   .set-browser,
-  .sync-controls {
+  .sync-controls,
+  .cardmarket-prep {
     grid-template-columns: 1fr;
   }
 

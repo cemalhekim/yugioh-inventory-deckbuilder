@@ -240,6 +240,7 @@ function App() {
   const [kaibaSaveName, setKaibaSaveName] = useState('')
   const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
   const [autoSyncKaiba, setAutoSyncKaiba] = useState(false)
+  const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -342,6 +343,12 @@ function App() {
       .sort((a, b) => a.card.name.localeCompare(b.card.name))
   }, [deckTotals, inventoryById])
 
+  const missingListText = useMemo(() => {
+    return missingEntries
+      .map((entry) => `${entry.missing}x ${entry.card.name}`)
+      .join('\n')
+  }, [missingEntries])
+
   const deckSize = zoneOrder.reduce(
     (sum, zone) => sum + deck[zone].reduce((total, entry) => total + entry.quantity, 0),
     0,
@@ -397,23 +404,23 @@ function App() {
   }
 
   function copyMissingList() {
-    const list = missingEntries
-      .map((entry) => `${entry.missing}x ${entry.card.name}`)
-      .join('\n')
-    void navigator.clipboard.writeText(list)
+    void navigator.clipboard.writeText(missingListText)
     setStatus('Missing-card list copied for Cardmarket Wants.')
   }
 
   function prepareCardmarketWants() {
     const listName = createTimestampedName()
-    const list = missingEntries
-      .map((entry) => `${entry.missing}x ${entry.card.name}`)
-      .join('\n')
-    void navigator.clipboard.writeText(list)
+    setCardmarketListName(listName)
+    void navigator.clipboard.writeText(missingListText)
     window.open(cardmarketWantsUrl, '_blank', 'noopener,noreferrer')
     setStatus(
       `Cardmarket opened. Create a Wants list named "${listName}", then paste the copied missing cards with Add deck list.`,
     )
+  }
+
+  function copyCardmarketListName() {
+    void navigator.clipboard.writeText(cardmarketListName)
+    setStatus('Cardmarket Wants list name copied.')
   }
 
   function downloadYdk() {
@@ -615,7 +622,7 @@ function App() {
             onClick={prepareCardmarketWants}
             disabled={!missingEntries.length}
           >
-            Cardmarket Wants
+            Open Cardmarket Wants
           </button>
         </div>
       </header>
@@ -968,12 +975,30 @@ function App() {
 
         <section className="panel missing-panel">
           <div className="panel-heading">
-            <h2>Missing Cards</h2>
-            <p>Copy this list into Cardmarket Wants.</p>
+            <div>
+              <h2>Missing Cards</h2>
+              <p>Use Cardmarket's New List and Add deck list controls.</p>
+            </div>
+          </div>
+          <div className="cardmarket-prep">
+            <label>
+              Wants list name
+              <input readOnly value={cardmarketListName} />
+            </label>
+            <button type="button" onClick={copyCardmarketListName}>
+              Copy Name
+            </button>
+            <button
+              type="button"
+              onClick={prepareCardmarketWants}
+              disabled={!missingEntries.length}
+            >
+              Open Wants
+            </button>
           </div>
           <textarea
             readOnly
-            value={missingEntries.map((entry) => `${entry.missing}x ${entry.card.name}`).join('\n')}
+            value={missingListText}
             placeholder="Cards missing from your inventory will appear here."
           />
         </section>
