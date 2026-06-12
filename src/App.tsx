@@ -331,7 +331,7 @@ function App() {
   const [kaibaSaveName, setKaibaSaveName] = useState('')
   const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
   const [isKaibaFolderPicking, setIsKaibaFolderPicking] = useState(false)
-  const [autoSyncKaiba, setAutoSyncKaiba] = useState(false)
+  const [isRepoStateReady, setIsRepoStateReady] = useState(false)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
@@ -360,6 +360,8 @@ function App() {
         setStatus('Loaded inventory from repository backup.')
       } catch {
         // Static previews do not provide the local repo state API.
+      } finally {
+        if (!canceled) setIsRepoStateReady(true)
       }
     }
 
@@ -677,7 +679,6 @@ function App() {
         return
       }
 
-      setAutoSyncKaiba(false)
       setSelectedKaibaDeck('')
       setKaibaSaveName('')
       setKaibaDeckDir(payload.deckDir)
@@ -711,7 +712,6 @@ function App() {
 
   async function openKaibaDeck(fileName: string) {
     setKaibaStatus(`Opening ${fileName}...`)
-    setAutoSyncKaiba(false)
     try {
       const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(fileName)}`)
       if (!response.ok) throw new Error(`Could not open ${fileName}.`)
@@ -767,14 +767,14 @@ function App() {
   }, [deck, deckName, refreshKaibaDecks])
 
   useEffect(() => {
-    if (!autoSyncKaiba || !selectedKaibaDeck) return
+    if (!selectedKaibaDeck) return
 
     const timeout = window.setTimeout(() => {
       void saveKaibaDeck(selectedKaibaDeck, true)
     }, 900)
 
     return () => window.clearTimeout(timeout)
-  }, [autoSyncKaiba, saveKaibaDeck, selectedKaibaDeck])
+  }, [saveKaibaDeck, selectedKaibaDeck])
 
   async function importYdk(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -817,7 +817,7 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
-  async function saveRepoBackup() {
+  const saveRepoBackup = useCallback(async (quiet = false) => {
     try {
       const response = await fetch('/api/app-state', {
         method: 'PUT',
@@ -826,11 +826,23 @@ function App() {
       })
       if (!response.ok) throw new Error('Could not save repository backup.')
       const payload = (await response.json()) as { filePath: string }
-      setStatus(`Repository backup saved: ${payload.filePath}`)
+      if (!quiet) setStatus(`Repository backup saved: ${payload.filePath}`)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Repository backup failed.')
+      if (!quiet) {
+        setStatus(error instanceof Error ? error.message : 'Repository backup failed.')
+      }
     }
-  }
+  }, [deck, deckName, inventory])
+
+  useEffect(() => {
+    if (!isRepoStateReady) return
+
+    const timeout = window.setTimeout(() => {
+      void saveRepoBackup(true)
+    }, 1200)
+
+    return () => window.clearTimeout(timeout)
+  }, [deck, deckName, inventory, isRepoStateReady, saveRepoBackup])
 
   async function importBackup(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -1178,15 +1190,6 @@ function App() {
             </div>
           </div>
           <div className="sync-controls">
-            <label>
-              <input
-                type="checkbox"
-                checked={autoSyncKaiba}
-                disabled={!selectedKaibaDeck}
-                onChange={(event) => setAutoSyncKaiba(event.target.checked)}
-              />
-              Auto-sync selected deck
-            </label>
             <div className="save-as-row">
               <input
                 value={kaibaSaveName}

@@ -36,8 +36,8 @@ npm run dev
 
 When running through the Vite dev server, the app first checks for
 `data/inventory-backup.json`. If that repository backup exists, it loads the
-saved inventory, deck, and deck name on startup. Use Inventory -> Save Repo to
-write the current app state to that file.
+saved inventory, deck, and deck name on startup. App changes are automatically
+saved back to that repository backup while the dev server is running.
 
 ## KaibaPro 2 Sync
 
@@ -53,8 +53,10 @@ Use the KaibaPro Sync panel to:
 - refresh the simulator deck list,
 - open an existing `.ydk`,
 - save the current app deck back to the selected simulator deck,
-- save the current deck as a new simulator `.ydk`,
-- enable auto-sync for the selected deck.
+- save the current deck as a new simulator `.ydk`.
+
+After a KaibaPro deck is selected, app deck changes are automatically synced
+back to that selected `.ydk`.
 
 To use another deck directory, start the dev server with:
 
