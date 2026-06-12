@@ -376,6 +376,13 @@ function App() {
     setDeck((current) => addCardCopies(current, targetZone, card))
   }
 
+  function updateDeckCard(zone: DeckZone, card: YgoCard, delta: number) {
+    setDeck((current) => ({
+      ...current,
+      [zone]: upsertEntry(current[zone], card, delta),
+    }))
+  }
+
   function copyMissingList() {
     const list = missingEntries
       .map((entry) => `${entry.missing}x ${entry.card.name}`)
@@ -782,18 +789,23 @@ function App() {
                           <img
                             src={entry.card.card_images?.[0]?.image_url_small}
                             alt={entry.card.name}
+                            title="Right-click to remove one. Middle-click to add one."
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              updateDeckCard(zone, entry.card, -1)
+                            }}
+                            onAuxClick={(event) => {
+                              if (event.button !== 1) return
+                              event.preventDefault()
+                              updateDeckCard(zone, entry.card, 1)
+                            }}
                           />
                           <div>
                             <strong>{entry.quantity}x</strong>
                             <button
                               type="button"
                               aria-label={`Remove ${entry.card.name}`}
-                              onClick={() =>
-                                setDeck((current) => ({
-                                  ...current,
-                                  [zone]: upsertEntry(current[zone], entry.card, -1),
-                                }))
-                              }
+                              onClick={() => updateDeckCard(zone, entry.card, -1)}
                             >
                               -
                             </button>
@@ -811,12 +823,7 @@ function App() {
                         </small>
                         <button
                           type="button"
-                          onClick={() =>
-                            setDeck((current) => ({
-                              ...current,
-                              [zone]: upsertEntry(current[zone], entry.card, -1),
-                            }))
-                          }
+                          onClick={() => updateDeckCard(zone, entry.card, -1)}
                         >
                           -
                         </button>
