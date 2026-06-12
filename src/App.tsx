@@ -113,6 +113,30 @@ function getDeckSortRank(card: YgoCard) {
   return 900
 }
 
+function getSearchSortRank(card: YgoCard) {
+  const type = card.type.toLowerCase()
+
+  if (type.includes('normal monster')) return 10
+  if (type.includes('ritual')) return 30
+  if (isExtraDeckCard(card)) return 40
+  if (type.includes('spell')) return 50
+  if (type.includes('trap')) return 60
+  if (type.includes('monster')) return 20
+  return 90
+}
+
+function sortSearchCards(cards: YgoCard[]) {
+  return [...cards].sort((a, b) => {
+    const rankDiff = getSearchSortRank(a) - getSearchSortRank(b)
+    if (rankDiff) return rankDiff
+
+    const nameDiff = a.name.localeCompare(b.name)
+    if (nameDiff) return nameDiff
+
+    return a.id - b.id
+  })
+}
+
 function sortDeckEntries(entries: DeckEntry[]) {
   return [...entries].sort((a, b) => {
     const rankDiff = getDeckSortRank(a.card) - getDeckSortRank(b.card)
@@ -387,7 +411,7 @@ function App() {
         )
         if (!response.ok) throw new Error('No cards found')
         const payload = (await response.json()) as { data: YgoCard[] }
-        setResults(payload.data.slice(0, 20))
+        setResults(sortSearchCards(payload.data).slice(0, 20))
         setStatus(`Found ${payload.data.length} matching cards.`)
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -663,7 +687,7 @@ function App() {
       const response = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php')
       if (!response.ok) throw new Error('Could not load all cards.')
       const payload = (await response.json()) as { data: YgoCard[] }
-      const cards = payload.data.sort((a, b) => a.name.localeCompare(b.name))
+      const cards = sortSearchCards(payload.data)
       setResults(cards)
       setStatus(`Listed ${cards.length} cards.`)
     } catch (error) {
