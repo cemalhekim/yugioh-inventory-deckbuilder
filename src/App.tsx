@@ -438,6 +438,7 @@ function App() {
 
   async function openKaibaDeck(fileName: string) {
     setKaibaStatus(`Opening ${fileName}...`)
+    setAutoSyncKaiba(false)
     try {
       const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(fileName)}`)
       if (!response.ok) throw new Error(`Could not open ${fileName}.`)
