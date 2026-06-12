@@ -71,10 +71,14 @@ store Cardmarket account passwords.
 The supported workflow is:
 
 1. Build a deck.
-2. Click Open Cardmarket Wants.
-3. Create a Wants list using the timestamped name shown in the Missing Cards panel.
-4. Paste the copied missing-card list into Add deck list.
-4. Use Cardmarket Shopping Wizard to choose sellers and add cards to cart.
+2. Install `tools/cardmarket-wants-helper.user.js` in Tampermonkey.
+3. Click Open Cardmarket Wants.
+4. Use the injected helper panel on Cardmarket to copy/fill the timestamped
+   list name and missing-card decklist.
+5. Use Cardmarket Shopping Wizard to choose sellers and add cards to cart.
+
+The helper expects you to already be logged into Cardmarket in your browser. It
+does not ask for or read your Cardmarket password.
 
 Future versions can add a browser extension or official Cardmarket API support if
 credentials are available.

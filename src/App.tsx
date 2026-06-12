@@ -64,6 +64,7 @@ const zoneLabels: Record<DeckZone, string> = {
 
 const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
+const cardmarketPayloadHashKey = 'ygo-inventory-wants'
 
 function isExtraDeckCard(card: YgoCard) {
   return ['Fusion', 'Synchro', 'XYZ', 'Xyz', 'Link'].some((type) =>
@@ -212,6 +213,12 @@ function createTimestampedName() {
     pad(date.getDate()),
     `${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`,
   ].join(' ')
+}
+
+function encodePayloadForUrl(payload: unknown) {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload))
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
 function App() {
@@ -412,9 +419,18 @@ function App() {
     const listName = createTimestampedName()
     setCardmarketListName(listName)
     void navigator.clipboard.writeText(missingListText)
-    window.open(cardmarketWantsUrl, '_blank', 'noopener,noreferrer')
+    const payload = encodePayloadForUrl({
+      name: listName,
+      decklist: missingListText,
+      createdAt: new Date().toISOString(),
+    })
+    window.open(
+      `${cardmarketWantsUrl}#${cardmarketPayloadHashKey}=${payload}`,
+      '_blank',
+      'noopener,noreferrer',
+    )
     setStatus(
-      `Cardmarket opened. Create a Wants list named "${listName}", then paste the copied missing cards with Add deck list.`,
+      `Cardmarket opened with helper payload. If the userscript is installed, use its panel to create/fill the Wants list.`,
     )
   }
 
@@ -977,7 +993,7 @@ function App() {
           <div className="panel-heading">
             <div>
               <h2>Missing Cards</h2>
-              <p>Use Cardmarket's New List and Add deck list controls.</p>
+              <p>Install the local Cardmarket helper userscript for fill controls.</p>
             </div>
           </div>
           <div className="cardmarket-prep">
