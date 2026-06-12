@@ -718,7 +718,7 @@ button:disabled {
   border-radius: 8px;
   box-shadow: 0 0 42px rgba(57, 200, 255, 0.34);
   display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(280px, 1fr);
+  grid-template-columns: minmax(280px, 360px) minmax(280px, 1fr);
   gap: 14px;
   max-height: calc(100vh - 48px);
   max-width: min(980px, calc(100vw - 48px));
@@ -730,13 +730,17 @@ button:disabled {
 
 .card-preview-art {
   align-items: center;
+  aspect-ratio: 1 / 1;
   background: rgba(3, 10, 20, 0.6);
   border: 1px solid rgba(150, 225, 255, 0.45);
   border-radius: 6px;
   display: flex;
   justify-content: center;
-  min-height: 420px;
+  justify-self: center;
+  max-width: 360px;
+  min-height: 0;
   overflow: hidden;
+  width: 100%;
 }
 
 .card-preview-art img {
@@ -917,6 +921,6 @@ button:disabled {
   }
 
   .card-preview-art {
-    min-height: 300px;
+    max-width: min(360px, 100%);
   }
 }
