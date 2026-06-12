@@ -72,6 +72,52 @@ function isExtraDeckCard(card: YgoCard) {
   )
 }
 
+function getDeckSortRank(card: YgoCard) {
+  const type = card.type.toLowerCase()
+  const race = card.race?.toLowerCase() ?? ''
+
+  if (type.includes('normal monster')) return 10
+  if (type.includes('effect') || type.includes('tuner') || type.includes('spirit')) return 20
+  if (type.includes('ritual')) return 30
+  if (type.includes('pendulum')) return 40
+  if (type.includes('spell')) {
+    const spellRanks: Record<string, number> = {
+      normal: 100,
+      'quick-play': 110,
+      continuous: 120,
+      equip: 130,
+      field: 140,
+      ritual: 150,
+    }
+    return spellRanks[race] ?? 190
+  }
+  if (type.includes('trap')) {
+    const trapRanks: Record<string, number> = {
+      normal: 200,
+      continuous: 210,
+      counter: 220,
+    }
+    return trapRanks[race] ?? 290
+  }
+  if (type.includes('fusion')) return 300
+  if (type.includes('synchro')) return 310
+  if (type.includes('xyz')) return 320
+  if (type.includes('link')) return 330
+  return 900
+}
+
+function sortDeckEntries(entries: DeckEntry[]) {
+  return [...entries].sort((a, b) => {
+    const rankDiff = getDeckSortRank(a.card) - getDeckSortRank(b.card)
+    if (rankDiff) return rankDiff
+
+    const subtypeDiff = (a.card.race ?? '').localeCompare(b.card.race ?? '')
+    if (subtypeDiff) return subtypeDiff
+
+    return a.card.name.localeCompare(b.card.name)
+  })
+}
+
 function loadState(): PersistedState {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) {
@@ -408,6 +454,15 @@ function App() {
       ...current,
       [zone]: upsertEntry(current[zone], card, delta),
     }))
+  }
+
+  function sortCurrentDeck() {
+    setDeck((current) => ({
+      main: sortDeckEntries(current.main),
+      extra: sortDeckEntries(current.extra),
+      side: sortDeckEntries(current.side),
+    }))
+    setStatus('Deck sorted by card type and name.')
   }
 
   function copyMissingList() {
@@ -830,6 +885,9 @@ function App() {
                 />
                 <button type="button" onClick={() => fileInputRef.current?.click()}>
                   Import YDK
+                </button>
+                <button type="button" onClick={sortCurrentDeck}>
+                  Sort
                 </button>
               </div>
             </div>
