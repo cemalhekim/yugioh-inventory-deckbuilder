@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import './App.css'
 
 type DeckZone = 'main' | 'extra' | 'side'
+type DeckViewMode = 'list' | 'cards'
 
 type YgoCard = {
   id: number
@@ -20,6 +21,13 @@ type YgoSet = {
   num_of_cards: number
   tcg_date?: string
   set_image?: string
+}
+
+type KaibaDeckFile = {
+  fileName: string
+  name: string
+  updatedAt: string
+  size: number
 }
 
 type InventoryEntry = {
@@ -200,6 +208,7 @@ function App() {
   )
   const [deck, setDeck] = useState<DeckState>(initialState.deck)
   const [deckName, setDeckName] = useState(initialState.deckName)
+  const [deckViewMode, setDeckViewMode] = useState<DeckViewMode>('list')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
   const [activeZone, setActiveZone] = useState<DeckZone>('main')
@@ -212,6 +221,12 @@ function App() {
   const [selectedSetCards, setSelectedSetCards] = useState<YgoCard[]>([])
   const [productStatus, setProductStatus] = useState('Loading product catalog...')
   const [isSetLoading, setIsSetLoading] = useState(false)
+  const [kaibaDecks, setKaibaDecks] = useState<KaibaDeckFile[]>([])
+  const [kaibaDeckDir, setKaibaDeckDir] = useState('')
+  const [selectedKaibaDeck, setSelectedKaibaDeck] = useState('')
+  const [kaibaSaveName, setKaibaSaveName] = useState('')
+  const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
+  const [autoSyncKaiba, setAutoSyncKaiba] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -402,6 +417,90 @@ function App() {
       setIsSetLoading(false)
     }
   }
+
+  const refreshKaibaDecks = useCallback(async () => {
+    try {
+      const response = await fetch('/api/kaibapro/decks/')
+      if (!response.ok) throw new Error('Could not connect to KaibaPro deck folder.')
+      const payload = (await response.json()) as {
+        deckDir: string
+        decks: KaibaDeckFile[]
+      }
+      setKaibaDeckDir(payload.deckDir)
+      setKaibaDecks(payload.decks)
+      setKaibaStatus(`Found ${payload.decks.length} KaibaPro decks.`)
+    } catch (error) {
+      setKaibaStatus(
+        error instanceof Error ? error.message : 'KaibaPro connection failed.',
+      )
+    }
+  }, [])
+
+  async function openKaibaDeck(fileName: string) {
+    setKaibaStatus(`Opening ${fileName}...`)
+    try {
+      const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(fileName)}`)
+      if (!response.ok) throw new Error(`Could not open ${fileName}.`)
+      const payload = (await response.json()) as {
+        fileName: string
+        name: string
+        content: string
+      }
+      const parsed = parseYdk(payload.content)
+      const allIds = [...parsed.main, ...parsed.extra, ...parsed.side]
+      const cardsById = await fetchCardsByIds(allIds)
+      const nextDeck: DeckState = { main: [], extra: [], side: [] }
+
+      for (const zone of zoneOrder) {
+        const cards = parsed[zone]
+          .map((id) => cardsById.get(id))
+          .filter((card): card is YgoCard => Boolean(card))
+        nextDeck[zone] = makeEntriesFromCards(cards)
+      }
+
+      setDeck(nextDeck)
+      setDeckName(payload.name)
+      setSelectedKaibaDeck(payload.fileName)
+      setKaibaSaveName(payload.name)
+      setKaibaStatus(`Loaded ${payload.fileName}.`)
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Open deck failed.')
+    }
+  }
+
+  const saveKaibaDeck = useCallback(async (fileNameOrName: string, quiet = false) => {
+    const target = fileNameOrName.trim()
+    if (!target) {
+      setKaibaStatus('Choose a KaibaPro deck or enter a save-as name.')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(target)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: createYdk(deck, deckName) }),
+      })
+      if (!response.ok) throw new Error('Could not save KaibaPro deck.')
+      const payload = (await response.json()) as { fileName: string }
+      setSelectedKaibaDeck(payload.fileName)
+      setKaibaSaveName(payload.fileName.replace(/\.ydk$/i, ''))
+      if (!quiet) setKaibaStatus(`Saved ${payload.fileName}.`)
+      await refreshKaibaDecks()
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Save deck failed.')
+    }
+  }, [deck, deckName, refreshKaibaDecks])
+
+  useEffect(() => {
+    if (!autoSyncKaiba || !selectedKaibaDeck) return
+
+    const timeout = window.setTimeout(() => {
+      void saveKaibaDeck(selectedKaibaDeck, true)
+    }, 900)
+
+    return () => window.clearTimeout(timeout)
+  }, [autoSyncKaiba, saveKaibaDeck, selectedKaibaDeck])
 
   async function importYdk(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -636,20 +735,38 @@ function App() {
                 aria-label="Deck name"
               />
             </div>
-            <div className="file-actions">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".ydk,text/plain"
-                onChange={importYdk}
-                hidden
-              />
-              <button type="button" onClick={() => fileInputRef.current?.click()}>
-                Import YDK
-              </button>
+            <div className="deck-tools">
+              <div className="view-toggle" aria-label="Deck view mode">
+                <button
+                  className={deckViewMode === 'list' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setDeckViewMode('list')}
+                >
+                  List
+                </button>
+                <button
+                  className={deckViewMode === 'cards' ? 'active' : ''}
+                  type="button"
+                  onClick={() => setDeckViewMode('cards')}
+                >
+                  Cards
+                </button>
+              </div>
+              <div className="file-actions">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".ydk,text/plain"
+                  onChange={importYdk}
+                  hidden
+                />
+                <button type="button" onClick={() => fileInputRef.current?.click()}>
+                  Import YDK
+                </button>
+              </div>
             </div>
           </div>
-          <div className="deck-zones">
+          <div className={`deck-zones ${deckViewMode === 'cards' ? 'card-view' : ''}`}>
             {zoneOrder.map((zone) => (
               <div className="deck-zone" key={zone}>
                 <h3>
@@ -657,31 +774,119 @@ function App() {
                   <span>{deck[zone].reduce((sum, entry) => sum + entry.quantity, 0)}</span>
                 </h3>
                 {deck[zone].length ? (
-                  deck[zone].map((entry) => (
-                    <div className="line-item" key={entry.card.id}>
-                      <span>{entry.quantity}x</span>
-                      <strong>{entry.card.name}</strong>
-                      <small>
-                        owned {inventoryById.get(entry.card.id) ?? 0}
-                      </small>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDeck((current) => ({
-                            ...current,
-                            [zone]: upsertEntry(current[zone], entry.card, -1),
-                          }))
-                        }
-                      >
-                        -
-                      </button>
+                  deckViewMode === 'cards' ? (
+                    <div className="deck-card-grid">
+                      {deck[zone].map((entry) => (
+                        <article className="deck-card" key={entry.card.id}>
+                          <img
+                            src={entry.card.card_images?.[0]?.image_url_small}
+                            alt={entry.card.name}
+                          />
+                          <div>
+                            <strong>{entry.quantity}x</strong>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${entry.card.name}`}
+                              onClick={() =>
+                                setDeck((current) => ({
+                                  ...current,
+                                  [zone]: upsertEntry(current[zone], entry.card, -1),
+                                }))
+                              }
+                            >
+                              -
+                            </button>
+                          </div>
+                        </article>
+                      ))}
                     </div>
-                  ))
+                  ) : (
+                    deck[zone].map((entry) => (
+                      <div className="line-item" key={entry.card.id}>
+                        <span>{entry.quantity}x</span>
+                        <strong>{entry.card.name}</strong>
+                        <small>
+                          owned {inventoryById.get(entry.card.id) ?? 0}
+                        </small>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeck((current) => ({
+                              ...current,
+                              [zone]: upsertEntry(current[zone], entry.card, -1),
+                            }))
+                          }
+                        >
+                          -
+                        </button>
+                      </div>
+                    ))
+                  )
                 ) : (
                   <p className="empty-state">No cards yet.</p>
                 )}
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="panel kaiba-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>KaibaPro Sync</h2>
+              <p>{kaibaDeckDir || kaibaStatus}</p>
+            </div>
+            <button type="button" onClick={() => void refreshKaibaDecks()}>
+              Refresh
+            </button>
+          </div>
+          <div className="sync-controls">
+            <label>
+              <input
+                type="checkbox"
+                checked={autoSyncKaiba}
+                disabled={!selectedKaibaDeck}
+                onChange={(event) => setAutoSyncKaiba(event.target.checked)}
+              />
+              Auto-sync selected deck
+            </label>
+            <div className="save-as-row">
+              <input
+                value={kaibaSaveName}
+                onChange={(event) => setKaibaSaveName(event.target.value)}
+                placeholder="Deck file name"
+              />
+              <button type="button" onClick={() => void saveKaibaDeck(kaibaSaveName)}>
+                Save As
+              </button>
+            </div>
+            <button
+              type="button"
+              disabled={!selectedKaibaDeck}
+              onClick={() => void saveKaibaDeck(selectedKaibaDeck)}
+            >
+              Save Current
+            </button>
+            <p className="sync-status">{kaibaStatus}</p>
+          </div>
+          <div className="kaiba-deck-list">
+            {kaibaDecks.length ? (
+              kaibaDecks.map((deckFile) => (
+                <button
+                  className={
+                    selectedKaibaDeck === deckFile.fileName ? 'selected' : ''
+                  }
+                  key={deckFile.fileName}
+                  type="button"
+                  onClick={() => void openKaibaDeck(deckFile.fileName)}
+                >
+                  <strong>{deckFile.name}</strong>
+                  <span>{new Date(deckFile.updatedAt).toLocaleString()}</span>
+                </button>
+              ))
+            ) : (
+              <p className="empty-state">Refresh to list KaibaPro decks.</p>
+            )}
           </div>
         </section>
 

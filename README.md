@@ -11,8 +11,10 @@ Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporti
 - Add individual cards from a selected set/product to inventory.
 - Bulk-add all listed cards from a selected set/product to inventory.
 - Build Main, Extra, and Side Deck zones.
+- Toggle deck display between list view and card-image view.
 - Auto-route Extra Deck monsters when adding from search.
 - Import and export `.ydk` files.
+- Read, open, save, and auto-sync decks from a local KaibaPro 2 deck folder.
 - Calculate missing cards from your deck against your inventory.
 - Copy missing cards as `3x Card Name` lines for Cardmarket Wants.
 - Backup and restore app data as JSON.
@@ -27,6 +29,29 @@ structure decks.
 ```bash
 npm install
 npm run dev
+```
+
+## KaibaPro 2 Sync
+
+When running through Vite dev server, the app exposes a local-only API for the
+KaibaPro 2 deck directory:
+
+```bash
+/home/ch/Downloads/KaibaPro 2/deck
+```
+
+Use the KaibaPro Sync panel to:
+
+- refresh the simulator deck list,
+- open an existing `.ydk`,
+- save the current app deck back to the selected simulator deck,
+- save the current deck as a new simulator `.ydk`,
+- enable auto-sync for the selected deck.
+
+To use another deck directory, start the dev server with:
+
+```bash
+KAIBAPRO_DECK_DIR="/path/to/KaibaPro 2/deck" npm run dev
 ```
 
 ## Build
