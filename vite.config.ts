@@ -1,10 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import type { Plugin } from 'vite'
 
 const defaultDeckDir = '/home/ch/Downloads/KaibaPro 2/deck'
+const repoStatePath = path.resolve(process.cwd(), 'data', 'inventory-backup.json')
+const execFileAsync = promisify(execFile)
 
 function sendJson(res: import('node:http').ServerResponse, status: number, data: unknown) {
   res.statusCode = status
@@ -33,17 +37,45 @@ function getSafeDeckPath(deckDir: string, fileName: string) {
   return { deckPath, fileName: path.basename(deckPath) }
 }
 
+async function pickDeckFolder(currentDeckDir: string) {
+  if (process.platform !== 'win32') {
+    throw new Error('Folder picker is only available on Windows. Set KAIBAPRO_DECK_DIR instead.')
+  }
+
+  const script = `
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'Select your KaibaPro 2 deck folder'
+$dialog.ShowNewFolderButton = $true
+$initialPath = [Environment]::GetEnvironmentVariable('KAIBAPRO_CURRENT_DECK_DIR')
+if ($initialPath -and (Test-Path -LiteralPath $initialPath)) {
+  $dialog.SelectedPath = $initialPath
+}
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+  [Console]::Out.Write($dialog.SelectedPath)
+}
+`
+  const { stdout } = await execFileAsync('powershell.exe', [
+    '-NoProfile',
+    '-STA',
+    '-Command',
+    script,
+  ], {
+    env: { ...process.env, KAIBAPRO_CURRENT_DECK_DIR: currentDeckDir },
+  })
+  return stdout.trim()
+}
+
 function kaibaProDecksPlugin(): Plugin {
-  const deckDir = process.env.KAIBAPRO_DECK_DIR ?? defaultDeckDir
+  let deckDir = process.env.KAIBAPRO_DECK_DIR ?? defaultDeckDir
 
   return {
     name: 'kaibapro-decks-api',
     configureServer(server) {
       server.middlewares.use('/api/kaibapro/decks', async (req, res) => {
         try {
-          await fs.mkdir(deckDir, { recursive: true })
-
           if (req.method === 'GET' && req.url === '/') {
+            await fs.mkdir(deckDir, { recursive: true })
             const entries = await fs.readdir(deckDir, { withFileTypes: true })
             const decks = await Promise.all(
               entries
@@ -63,12 +95,37 @@ function kaibaProDecksPlugin(): Plugin {
             return
           }
 
+          if (req.method === 'PUT' && req.url === '/folder') {
+            const body = JSON.parse(await readRequestBody(req)) as { deckDir?: string }
+            if (typeof body.deckDir !== 'string' || !body.deckDir.trim()) {
+              sendJson(res, 400, { error: 'deckDir must be a folder path' })
+              return
+            }
+            deckDir = path.resolve(body.deckDir.trim())
+            await fs.mkdir(deckDir, { recursive: true })
+            sendJson(res, 200, { deckDir })
+            return
+          }
+
+          if (req.method === 'POST' && req.url === '/select-folder') {
+            const selectedDeckDir = await pickDeckFolder(deckDir)
+            if (!selectedDeckDir) {
+              sendJson(res, 200, { deckDir, canceled: true })
+              return
+            }
+            deckDir = path.resolve(selectedDeckDir)
+            await fs.mkdir(deckDir, { recursive: true })
+            sendJson(res, 200, { deckDir })
+            return
+          }
+
           const match = decodeURIComponent(req.url ?? '').match(/^\/([^/]+)$/)
           if (!match) {
             sendJson(res, 404, { error: 'Not found' })
             return
           }
 
+          await fs.mkdir(deckDir, { recursive: true })
           const { deckPath, fileName } = getSafeDeckPath(deckDir, match[1])
 
           if (req.method === 'GET') {
@@ -104,7 +161,50 @@ function kaibaProDecksPlugin(): Plugin {
   }
 }
 
+function appStatePlugin(): Plugin {
+  return {
+    name: 'repo-app-state-api',
+    configureServer(server) {
+      server.middlewares.use('/api/app-state', async (req, res) => {
+        try {
+          if (req.method === 'GET') {
+            try {
+              const content = await fs.readFile(repoStatePath, 'utf8')
+              sendJson(res, 200, { state: JSON.parse(content) })
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                sendJson(res, 200, { state: null })
+                return
+              }
+              throw error
+            }
+            return
+          }
+
+          if (req.method === 'PUT') {
+            const body = JSON.parse(await readRequestBody(req)) as { state?: unknown }
+            if (!body.state || typeof body.state !== 'object') {
+              sendJson(res, 400, { error: 'state must be an object' })
+              return
+            }
+            await fs.mkdir(path.dirname(repoStatePath), { recursive: true })
+            await fs.writeFile(repoStatePath, `${JSON.stringify(body.state, null, 2)}\n`, 'utf8')
+            sendJson(res, 200, { filePath: repoStatePath })
+            return
+          }
+
+          sendJson(res, 405, { error: 'Method not allowed' })
+        } catch (error) {
+          sendJson(res, 500, {
+            error: error instanceof Error ? error.message : 'App state API failed.',
+          })
+        }
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), kaibaProDecksPlugin()],
+  plugins: [react(), kaibaProDecksPlugin(), appStatePlugin()],
 })

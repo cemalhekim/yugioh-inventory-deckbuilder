@@ -20,6 +20,7 @@ Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporti
 - Prepare a Cardmarket Wants workflow by generating a timestamped list name,
   opening the Wants page, and copying the missing-card list.
 - Backup and restore app data as JSON.
+- Save app data to `data/inventory-backup.json` in this repository.
 - Persist data locally in the browser using `localStorage`.
 
 Bulk adding from sealed products adds one copy of each listed card. The
@@ -32,6 +33,11 @@ structure decks.
 npm install
 npm run dev
 ```
+
+When running through the Vite dev server, the app first checks for
+`data/inventory-backup.json`. If that repository backup exists, it loads the
+saved inventory, deck, and deck name on startup. Use Inventory -> Save Repo to
+write the current app state to that file.
 
 ## KaibaPro 2 Sync
 

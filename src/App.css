@@ -411,6 +411,13 @@ button:disabled {
   grid-template-columns: auto minmax(280px, 1fr) auto minmax(180px, 0.7fr);
 }
 
+.kaiba-folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .sync-controls label {
   align-items: center;
   color: var(--kc-text);

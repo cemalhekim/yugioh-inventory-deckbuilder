@@ -55,6 +55,7 @@ type PersistedState = {
 }
 
 const STORAGE_KEY = 'ygo-inventory-deckbuilder-v1'
+const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
 
 const emptyDeck: DeckState = {
   main: [],
@@ -131,14 +132,17 @@ function loadState(): PersistedState {
   }
 
   try {
-    const parsed = JSON.parse(raw) as PersistedState
-    return {
-      inventory: parsed.inventory ?? [],
-      deck: { ...emptyDeck, ...parsed.deck },
-      deckName: parsed.deckName ?? 'Untitled Deck',
-    }
+    return normalizeState(JSON.parse(raw) as Partial<PersistedState>)
   } catch {
     return { inventory: [], deck: emptyDeck, deckName: 'Untitled Deck' }
+  }
+}
+
+function normalizeState(state: Partial<PersistedState>): PersistedState {
+  return {
+    inventory: state.inventory ?? [],
+    deck: { ...emptyDeck, ...state.deck },
+    deckName: state.deckName ?? 'Untitled Deck',
   }
 }
 
@@ -295,18 +299,51 @@ function App() {
   const [productStatus, setProductStatus] = useState('Loading product catalog...')
   const [isSetLoading, setIsSetLoading] = useState(false)
   const [kaibaDecks, setKaibaDecks] = useState<KaibaDeckFile[]>([])
-  const [kaibaDeckDir, setKaibaDeckDir] = useState('')
+  const [kaibaDeckDir, setKaibaDeckDir] = useState(
+    () => localStorage.getItem(KAIBAPRO_DECK_DIR_KEY) ?? '',
+  )
   const [selectedKaibaDeck, setSelectedKaibaDeck] = useState('')
   const [kaibaSaveName, setKaibaSaveName] = useState('')
   const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
+  const [isKaibaFolderPicking, setIsKaibaFolderPicking] = useState(false)
   const [autoSyncKaiba, setAutoSyncKaiba] = useState(false)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
 
   useEffect(() => {
     const state: PersistedState = { inventory, deck, deckName }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }, [inventory, deck, deckName])
+
+  useEffect(() => {
+    let canceled = false
+
+    async function loadRepoState() {
+      try {
+        const response = await fetch('/api/app-state')
+        if (!response.ok) return
+        const payload = (await response.json()) as {
+          state: Partial<PersistedState> | null
+        }
+        if (!payload.state || canceled) return
+
+        const nextState = normalizeState(payload.state)
+        setInventory(nextState.inventory)
+        setDeck(nextState.deck)
+        setDeckName(nextState.deckName)
+        setStatus('Loaded inventory from repository backup.')
+      } catch {
+        // Static previews do not provide the local repo state API.
+      }
+    }
+
+    void loadRepoState()
+
+    return () => {
+      canceled = true
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -544,6 +581,7 @@ function App() {
         decks: KaibaDeckFile[]
       }
       setKaibaDeckDir(payload.deckDir)
+      localStorage.setItem(KAIBAPRO_DECK_DIR_KEY, payload.deckDir)
       setKaibaDecks(payload.decks)
       setKaibaStatus(`Found ${payload.decks.length} KaibaPro decks.`)
     } catch (error) {
@@ -552,6 +590,64 @@ function App() {
       )
     }
   }, [])
+
+  useEffect(() => {
+    let canceled = false
+
+    async function connectKaibaFolder() {
+      try {
+        const savedDeckDir = initialKaibaDeckDirRef.current
+        if (savedDeckDir) {
+          const response = await fetch('/api/kaibapro/decks/folder', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deckDir: savedDeckDir }),
+          })
+          if (!response.ok) throw new Error('Could not use saved KaibaPro folder.')
+        }
+        if (!canceled) await refreshKaibaDecks()
+      } catch (error) {
+        if (!canceled) {
+          setKaibaStatus(
+            error instanceof Error ? error.message : 'KaibaPro connection failed.',
+          )
+        }
+      }
+    }
+
+    void connectKaibaFolder()
+
+    return () => {
+      canceled = true
+    }
+  }, [refreshKaibaDecks])
+
+  async function chooseKaibaDeckFolder() {
+    setKaibaStatus('Select your KaibaPro deck folder...')
+    setIsKaibaFolderPicking(true)
+    try {
+      const response = await fetch('/api/kaibapro/decks/select-folder', {
+        method: 'POST',
+      })
+      if (!response.ok) throw new Error('Could not select KaibaPro deck folder.')
+      const payload = (await response.json()) as { deckDir: string; canceled?: boolean }
+      if (payload.canceled) {
+        setKaibaStatus('Folder selection canceled.')
+        return
+      }
+
+      setAutoSyncKaiba(false)
+      setSelectedKaibaDeck('')
+      setKaibaSaveName('')
+      setKaibaDeckDir(payload.deckDir)
+      localStorage.setItem(KAIBAPRO_DECK_DIR_KEY, payload.deckDir)
+      await refreshKaibaDecks()
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Folder selection failed.')
+    } finally {
+      setIsKaibaFolderPicking(false)
+    }
+  }
 
   async function openKaibaDeck(fileName: string) {
     setKaibaStatus(`Opening ${fileName}...`)
@@ -659,6 +755,21 @@ function App() {
     link.download = 'ygo-inventory-backup.json'
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function saveRepoBackup() {
+    try {
+      const response = await fetch('/api/app-state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: { inventory, deck, deckName } }),
+      })
+      if (!response.ok) throw new Error('Could not save repository backup.')
+      const payload = (await response.json()) as { filePath: string }
+      setStatus(`Repository backup saved: ${payload.filePath}`)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Repository backup failed.')
+    }
   }
 
   async function importBackup(event: ChangeEvent<HTMLInputElement>) {
@@ -976,9 +1087,18 @@ function App() {
               <h2>KaibaPro Sync</h2>
               <p>{kaibaDeckDir || kaibaStatus}</p>
             </div>
-            <button type="button" onClick={() => void refreshKaibaDecks()}>
-              Refresh
-            </button>
+            <div className="kaiba-folder-actions">
+              <button
+                type="button"
+                disabled={isKaibaFolderPicking}
+                onClick={() => void chooseKaibaDeckFolder()}
+              >
+                Browse Folder
+              </button>
+              <button type="button" onClick={() => void refreshKaibaDecks()}>
+                Refresh
+              </button>
+            </div>
           </div>
           <div className="sync-controls">
             <label>
@@ -1034,6 +1154,9 @@ function App() {
           <div className="panel-heading">
             <h2>Inventory</h2>
             <div className="file-actions">
+              <button type="button" onClick={() => void saveRepoBackup()}>
+                Save Repo
+              </button>
               <button type="button" onClick={exportBackup}>Backup JSON</button>
               <label className="file-button">
                 Restore
