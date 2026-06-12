@@ -819,7 +819,7 @@ function App() {
       <header className="topbar">
         <div className="brand-block">
           <div className="kc-emblem" aria-hidden="true">
-            <span></span>
+            <span>KC</span>
           </div>
           <div>
             <p className="eyebrow">KaibaCorp deck command</p>
