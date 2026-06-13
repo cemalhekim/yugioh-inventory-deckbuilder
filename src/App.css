@@ -589,12 +589,18 @@ button:disabled {
   width: 100%;
 }
 
-.deck-card div {
+.deck-card-footer {
   align-items: center;
   display: flex;
   justify-content: space-between;
   min-height: 30px;
   padding: 4px 5px;
+}
+
+.deck-card-actions,
+.deck-line-actions {
+  display: flex;
+  gap: 4px;
 }
 
 .deck-card strong {
@@ -628,6 +634,10 @@ button:disabled {
   height: 30px;
   padding: 0;
   width: 32px;
+}
+
+.deck-line-actions button {
+  width: 30px;
 }
 
 .missing-panel {

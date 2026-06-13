@@ -1201,15 +1201,24 @@ function App() {
                               updateDeckCard(zone, entry.card, -1)
                             }}
                           />
-                          <div>
+                          <div className="deck-card-footer">
                             <strong>{entry.quantity}x</strong>
-                            <button
-                              type="button"
-                              aria-label={`Remove ${entry.card.name}`}
-                              onClick={() => updateDeckCard(zone, entry.card, -1)}
-                            >
-                              -
-                            </button>
+                            <div className="deck-card-actions">
+                              <button
+                                type="button"
+                                aria-label={`Add ${entry.card.name}`}
+                                onClick={() => updateDeckCard(zone, entry.card, 1)}
+                              >
+                                +
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Remove ${entry.card.name}`}
+                                onClick={() => updateDeckCard(zone, entry.card, -1)}
+                              >
+                                -
+                              </button>
+                            </div>
                           </div>
                         </article>
                       ))}
@@ -1224,12 +1233,22 @@ function App() {
                         <small>
                           owned {inventoryById.get(entry.card.id) ?? 0}
                         </small>
-                        <button
-                          type="button"
-                          onClick={() => updateDeckCard(zone, entry.card, -1)}
-                        >
-                          -
-                        </button>
+                        <div className="deck-line-actions">
+                          <button
+                            type="button"
+                            aria-label={`Add ${entry.card.name}`}
+                            onClick={() => updateDeckCard(zone, entry.card, 1)}
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${entry.card.name}`}
+                            onClick={() => updateDeckCard(zone, entry.card, -1)}
+                          >
+                            -
+                          </button>
+                        </div>
                       </div>
                     ))
                   )

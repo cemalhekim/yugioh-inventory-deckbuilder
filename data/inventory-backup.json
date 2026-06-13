@@ -217,7 +217,7 @@
           }
         ]
       },
-      "quantity": 2
+      "quantity": 3
     },
     {
       "card": {
@@ -4678,7 +4678,7 @@
             }
           ]
         },
-        "quantity": 2
+        "quantity": 3
       },
       {
         "card": {
@@ -4817,7 +4817,7 @@
             }
           ]
         },
-        "quantity": 1
+        "quantity": 2
       },
       {
         "card": {
@@ -7076,7 +7076,7 @@
             }
           ]
         },
-        "quantity": 2
+        "quantity": 1
       },
       {
         "card": {
@@ -7195,7 +7195,7 @@
             }
           ]
         },
-        "quantity": 2
+        "quantity": 1
       },
       {
         "card": {
