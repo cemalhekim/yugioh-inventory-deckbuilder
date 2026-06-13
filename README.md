@@ -15,6 +15,7 @@ Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporti
 - Auto-route Extra Deck monsters when adding from search.
 - Import and export `.ydk` files.
 - Read, open, save, and auto-sync decks from a local KaibaPro 2 deck folder.
+- Launch YGOPRO The Dawn of a New Era from the local install path.
 - Calculate missing cards from your deck against your inventory.
 - Copy missing cards as `3x Card Name` lines for Cardmarket Wants.
 - Prepare a Cardmarket Wants workflow by generating a timestamped list name,
@@ -62,6 +63,15 @@ To use another deck directory, start the dev server with:
 
 ```bash
 KAIBAPRO_DECK_DIR="/path/to/KaibaPro 2/deck" npm run dev
+```
+
+## YGOPRO Launch
+
+When running through the Vite dev server on Windows, the Launch YGOPRO button
+starts:
+
+```bash
+C:\Yu-Gi-Oh! The Dawn of a New Era\YGOPRO Dawn of a New Era Launcher Pro.exe
 ```
 
 ## Build

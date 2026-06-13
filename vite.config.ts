@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -8,6 +8,8 @@ import type { Plugin } from 'vite'
 
 const defaultDeckDir = '/home/ch/Downloads/KaibaPro 2/deck'
 const repoStatePath = path.resolve(process.cwd(), 'data', 'inventory-backup.json')
+const ygoproDir = 'C:\\Yu-Gi-Oh! The Dawn of a New Era'
+const ygoproLauncher = 'YGOPRO Dawn of a New Era Launcher Pro.exe'
 const execFileAsync = promisify(execFile)
 
 function sendJson(res: import('node:http').ServerResponse, status: number, data: unknown) {
@@ -204,7 +206,45 @@ function appStatePlugin(): Plugin {
   }
 }
 
+function ygoproLauncherPlugin(): Plugin {
+  return {
+    name: 'ygopro-launcher-api',
+    configureServer(server) {
+      server.middlewares.use('/api/ygopro/launch', async (req, res) => {
+        try {
+          if (req.method !== 'POST') {
+            sendJson(res, 405, { error: 'Method not allowed' })
+            return
+          }
+
+          if (process.platform !== 'win32') {
+            sendJson(res, 400, { error: 'YGOPRO launch is only available on Windows.' })
+            return
+          }
+
+          const launcherPath = path.join(ygoproDir, ygoproLauncher)
+          await fs.access(launcherPath)
+
+          const child = spawn(launcherPath, [], {
+            cwd: ygoproDir,
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: false,
+          })
+          child.unref()
+
+          sendJson(res, 200, { launched: true, launcherPath })
+        } catch (error) {
+          sendJson(res, 500, {
+            error: error instanceof Error ? error.message : 'YGOPRO launch failed.',
+          })
+        }
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), kaibaProDecksPlugin(), appStatePlugin()],
+  plugins: [react(), kaibaProDecksPlugin(), appStatePlugin(), ygoproLauncherPlugin()],
 })

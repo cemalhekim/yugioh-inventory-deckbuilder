@@ -594,6 +594,17 @@ function App() {
     setStatus('YDK exported.')
   }
 
+  async function launchYgopro() {
+    setStatus('Launching YGOPRO...')
+    try {
+      const response = await fetch('/api/ygopro/launch', { method: 'POST' })
+      if (!response.ok) throw new Error('Could not launch YGOPRO.')
+      setStatus('YGOPRO launcher started.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'YGOPRO launch failed.')
+    }
+  }
+
   async function loadSetCards(set: YgoSet) {
     setSelectedSet(set)
     setSelectedSetCards([])
@@ -874,6 +885,9 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <button type="button" onClick={() => void launchYgopro()}>
+            Launch YGOPRO
+          </button>
           <button type="button" onClick={downloadYdk}>Download YDK</button>
           <button type="button" onClick={copyMissingList} disabled={!missingEntries.length}>
             Copy Missing
