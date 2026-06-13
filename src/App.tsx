@@ -57,6 +57,7 @@ type PersistedState = {
 
 const STORAGE_KEY = 'ygo-inventory-deckbuilder-v1'
 const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
+const maxDeckCopies = 3
 
 const emptyDeck: DeckState = {
   main: [],
@@ -188,6 +189,30 @@ function upsertEntry(entries: DeckEntry[], card: YgoCard, delta: number) {
   return next
 }
 
+function countDeckCardCopies(deck: DeckState, cardId: number) {
+  return zoneOrder.reduce((sum, zone) => {
+    return sum + (deck[zone].find((entry) => entry.card.id === cardId)?.quantity ?? 0)
+  }, 0)
+}
+
+function addCardCopies(deck: DeckState, zone: DeckZone, card: YgoCard, copies = 1) {
+  if (copies <= 0) {
+    return {
+      ...deck,
+      [zone]: upsertEntry(deck[zone], card, copies),
+    }
+  }
+
+  const availableCopies = Math.max(maxDeckCopies - countDeckCardCopies(deck, card.id), 0)
+  const nextCopies = Math.min(copies, availableCopies)
+  if (nextCopies <= 0) return deck
+
+  return {
+    ...deck,
+    [zone]: upsertEntry(deck[zone], card, nextCopies),
+  }
+}
+
 function entriesToRepeatedIds(entries: DeckEntry[]) {
   return entries.flatMap((entry) =>
     Array.from({ length: entry.quantity }, () => entry.card.id),
@@ -238,16 +263,12 @@ function parseYdk(text: string) {
   return ids
 }
 
-function addCardCopies(deck: DeckState, zone: DeckZone, card: YgoCard, copies = 1) {
-  return {
-    ...deck,
-    [zone]: upsertEntry(deck[zone], card, copies),
-  }
-}
-
 function makeEntriesFromCards(cards: YgoCard[]) {
   const entries = new Map<number, DeckEntry>()
   for (const card of cards) {
+    const totalCopies = entries.get(card.id)?.quantity ?? 0
+    if (totalCopies >= maxDeckCopies) continue
+
     const current = entries.get(card.id)
     entries.set(card.id, {
       card,
@@ -524,14 +545,23 @@ function App() {
 
   function addToDeck(card: YgoCard) {
     const targetZone = activeZone === 'main' && isExtraDeckCard(card) ? 'extra' : activeZone
-    setDeck((current) => addCardCopies(current, targetZone, card))
+    setDeck((current) => {
+      if (countDeckCardCopies(current, card.id) >= maxDeckCopies) {
+        setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
+        return current
+      }
+      return addCardCopies(current, targetZone, card)
+    })
   }
 
   function updateDeckCard(zone: DeckZone, card: YgoCard, delta: number) {
-    setDeck((current) => ({
-      ...current,
-      [zone]: upsertEntry(current[zone], card, delta),
-    }))
+    setDeck((current) => {
+      if (delta > 0 && countDeckCardCopies(current, card.id) >= maxDeckCopies) {
+        setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
+        return current
+      }
+      return addCardCopies(current, zone, card, delta)
+    })
   }
 
   function handleDeckCardMouseDown(
