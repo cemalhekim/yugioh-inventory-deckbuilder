@@ -934,7 +934,7 @@ function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-block">
-          <img className="kc-emblem" src="/kaibacorp-logo.svg" alt="" aria-hidden="true" />
+          <img className="kc-emblem" src="/kaibacorp-logo.png" alt="" aria-hidden="true" />
           <div>
             <p className="eyebrow">KaibaCorp deck command</p>
             <h1>Build from what you own. Buy only what is missing.</h1>
