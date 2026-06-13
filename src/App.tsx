@@ -82,6 +82,7 @@ const cardmarketPayloadHashKey = 'ygo-inventory-wants'
 const tampermonkeyInstallUrl = 'https://www.tampermonkey.net/'
 const cardmarketHelperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
 const cardmarketHelperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
+const cardmarketHelperAttribute = 'data-ygo-inventory-cardmarket-helper'
 
 function isExtraDeckCard(card: YgoCard) {
   return ['Fusion', 'Synchro', 'XYZ', 'Xyz', 'Link'].some((type) =>
@@ -336,6 +337,10 @@ function encodePayloadForUrl(payload: unknown) {
 }
 
 function detectCardmarketHelper() {
+  if (document.documentElement.hasAttribute(cardmarketHelperAttribute)) {
+    return Promise.resolve(true)
+  }
+
   return new Promise<boolean>((resolve) => {
     let handled = false
     const timeout = window.setTimeout(() => {
@@ -343,7 +348,7 @@ function detectCardmarketHelper() {
       handled = true
       window.removeEventListener(cardmarketHelperReadyEvent, onReady)
       resolve(false)
-    }, 500)
+    }, 1200)
 
     function onReady() {
       if (handled) return
@@ -635,7 +640,7 @@ function App() {
     const helperDetected = await detectCardmarketHelper()
     if (!helperDetected) {
       window.open(tampermonkeyInstallUrl, '_blank', 'noopener,noreferrer')
-      setStatus('Tampermonkey helper not detected. Opened Tampermonkey install/update page.')
+      setStatus('Cardmarket helper script not detected. Opened Tampermonkey install/update page.')
       return
     }
 
