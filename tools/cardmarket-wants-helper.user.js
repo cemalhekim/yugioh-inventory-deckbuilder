@@ -1,9 +1,11 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.0
+// @version      0.1.1
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
 // @match        https://www.cardmarket.com/en/YuGiOh/Wants*
+// @match        http://localhost:*/*
+// @match        http://127.0.0.1:*/*
 // @grant        GM_setClipboard
 // ==/UserScript==
 
@@ -11,6 +13,16 @@
   'use strict'
 
   const hashKey = 'ygo-inventory-wants'
+  const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
+  const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
+
+  window.addEventListener(helperCheckEvent, () => {
+    window.dispatchEvent(new CustomEvent(helperReadyEvent, {
+      detail: { version: '0.1.1' },
+    }))
+  })
+
+  if (!window.location.hostname.includes('cardmarket.com')) return
 
   function decodePayload() {
     const match = window.location.hash.match(new RegExp(`${hashKey}=([^&]+)`))

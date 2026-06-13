@@ -7076,7 +7076,7 @@
             }
           ]
         },
-        "quantity": 1
+        "quantity": 2
       },
       {
         "card": {
@@ -7195,7 +7195,7 @@
             }
           ]
         },
-        "quantity": 1
+        "quantity": 2
       },
       {
         "card": {
@@ -7736,6 +7736,89 @@
           ]
         },
         "quantity": 2
+      },
+      {
+        "card": {
+          "id": 12381100,
+          "name": "Dragon Master Magia",
+          "typeline": [
+            "Dragon",
+            "Fusion",
+            "Effect"
+          ],
+          "type": "Fusion Monster",
+          "humanReadableCardType": "Fusion Effect Monster",
+          "frameType": "fusion",
+          "desc": "\"Blue-Eyes Ultimate Dragon\" or 3 \"Blue-Eyes\" monsters + 1 \"Chaos\" or \"Black Luster Soldier\" Ritual Monster\r\nMust be Fusion Summoned. When your opponent activates a card or effect (Quick Effect): You can negate the activation, and if you do, destroy that card. You can only use this effect of \"Dragon Master Magia\" in response to each card type (Monster, Spell, or Trap) once per turn. If this face-up card in its owner's control leaves the field because of an opponent's card: You can Special Summon 1 \"Blue-Eyes\" monster or 1 \"Chaos\" or \"Black Luster Soldier\" Ritual Monster from your Extra Deck or GY.",
+          "race": "Dragon",
+          "atk": 5000,
+          "def": 4000,
+          "level": 12,
+          "attribute": "LIGHT",
+          "ygoprodeck_url": "https://ygoprodeck.com/card/dragon-master-magia-14307",
+          "card_sets": [
+            {
+              "set_name": "Battles of Legend: Glorious Gallery",
+              "set_code": "BLGG-EN137",
+              "set_rarity": "Starlight Rare",
+              "set_rarity_code": "(StR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Battles of Legend: Glorious Gallery",
+              "set_code": "BLGG-EN137",
+              "set_rarity": "Ultra Rare",
+              "set_rarity_code": "(UR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Battles of Legend: Terminal Revenge",
+              "set_code": "BLTR-EN118",
+              "set_rarity": "Quarter Century Secret Rare",
+              "set_rarity_code": "",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Quarter Century Stampede",
+              "set_code": "RA04-EN055",
+              "set_rarity": "Cr",
+              "set_rarity_code": "",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Quarter Century Stampede",
+              "set_code": "RA04-EN055",
+              "set_rarity": "Platinum Secret Rare",
+              "set_rarity_code": "(PS)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Quarter Century Stampede",
+              "set_code": "RA04-EN055",
+              "set_rarity": "Ultimate Rare",
+              "set_rarity_code": "(UtR)",
+              "set_price": "0"
+            }
+          ],
+          "card_images": [
+            {
+              "id": 12381100,
+              "image_url": "https://images.ygoprodeck.com/images/cards/12381100.jpg",
+              "image_url_small": "https://images.ygoprodeck.com/images/cards_small/12381100.jpg",
+              "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/12381100.jpg"
+            }
+          ],
+          "card_prices": [
+            {
+              "cardmarket_price": "7.60",
+              "tcgplayer_price": "62.03",
+              "ebay_price": "0.00",
+              "amazon_price": "0.00",
+              "coolstuffinc_price": "0.00"
+            }
+          ]
+        },
+        "quantity": 1
       }
     ],
     "side": []

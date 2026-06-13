@@ -90,9 +90,10 @@ The supported workflow is:
 
 1. Build a deck.
 2. Install `tools/cardmarket-wants-helper.user.js` in Tampermonkey.
-3. Click Open Cardmarket Wants.
-4. Use the injected helper panel on Cardmarket to copy/fill the timestamped
-   list name and missing-card decklist.
+3. Click Open Cardmarket Wants. If the local helper is not detected, the app
+   opens the Tampermonkey install/update page instead.
+4. Use the injected helper panel on Cardmarket to copy/fill the list name and
+   missing-card decklist. List names use `Deck Name - YYYY-MM-DD HH-mm-ss`.
 5. Use Cardmarket Shopping Wizard to choose sellers and add cards to cart.
 
 The helper expects you to already be logged into Cardmarket in your browser. It
