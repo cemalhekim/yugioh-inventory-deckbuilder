@@ -58,6 +58,11 @@ type PersistedState = {
 const STORAGE_KEY = 'ygo-inventory-deckbuilder-v1'
 const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
 const maxDeckCopies = 3
+const deckZoneLimits: Record<DeckZone, number> = {
+  main: 60,
+  extra: 15,
+  side: 15,
+}
 
 const emptyDeck: DeckState = {
   main: [],
@@ -198,6 +203,10 @@ function countDeckCardCopies(deck: DeckState, cardId: number) {
   }, 0)
 }
 
+function countDeckZoneCards(deck: DeckState, zone: DeckZone) {
+  return deck[zone].reduce((sum, entry) => sum + entry.quantity, 0)
+}
+
 function addCardCopies(deck: DeckState, zone: DeckZone, card: YgoCard, copies = 1) {
   if (copies <= 0) {
     return {
@@ -207,7 +216,8 @@ function addCardCopies(deck: DeckState, zone: DeckZone, card: YgoCard, copies = 
   }
 
   const availableCopies = Math.max(maxDeckCopies - countDeckCardCopies(deck, card.id), 0)
-  const nextCopies = Math.min(copies, availableCopies)
+  const availableZoneSlots = Math.max(deckZoneLimits[zone] - countDeckZoneCards(deck, zone), 0)
+  const nextCopies = Math.min(copies, availableCopies, availableZoneSlots)
   if (nextCopies <= 0) return deck
 
   return {
@@ -266,17 +276,20 @@ function parseYdk(text: string) {
   return ids
 }
 
-function makeEntriesFromCards(cards: YgoCard[]) {
+function makeEntriesFromCards(cards: YgoCard[], zone: DeckZone) {
   const entries = new Map<number, DeckEntry>()
+  let zoneSize = 0
   for (const card of cards) {
     const totalCopies = entries.get(card.id)?.quantity ?? 0
     if (totalCopies >= maxDeckCopies) continue
+    if (zoneSize >= deckZoneLimits[zone]) break
 
     const current = entries.get(card.id)
     entries.set(card.id, {
       card,
       quantity: (current?.quantity ?? 0) + 1,
     })
+    zoneSize += 1
   }
   return Array.from(entries.values()).sort((a, b) =>
     a.card.name.localeCompare(b.card.name),
@@ -567,6 +580,10 @@ function App() {
   function addToDeck(card: YgoCard) {
     const targetZone = activeZone === 'main' && isExtraDeckCard(card) ? 'extra' : activeZone
     setDeck((current) => {
+      if (countDeckZoneCards(current, targetZone) >= deckZoneLimits[targetZone]) {
+        setStatus(`${zoneLabels[targetZone]} Deck is already at ${deckZoneLimits[targetZone]} cards.`)
+        return current
+      }
       if (countDeckCardCopies(current, card.id) >= maxDeckCopies) {
         setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
         return current
@@ -577,6 +594,10 @@ function App() {
 
   function updateDeckCard(zone: DeckZone, card: YgoCard, delta: number) {
     setDeck((current) => {
+      if (delta > 0 && countDeckZoneCards(current, zone) >= deckZoneLimits[zone]) {
+        setStatus(`${zoneLabels[zone]} Deck is already at ${deckZoneLimits[zone]} cards.`)
+        return current
+      }
       if (delta > 0 && countDeckCardCopies(current, card.id) >= maxDeckCopies) {
         setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
         return current
@@ -798,7 +819,7 @@ function App() {
         const cards = parsed[zone]
           .map((id) => cardsById.get(id))
           .filter((card): card is YgoCard => Boolean(card))
-        nextDeck[zone] = makeEntriesFromCards(cards)
+        nextDeck[zone] = makeEntriesFromCards(cards, zone)
       }
 
       setDeck(nextDeck)
@@ -861,7 +882,7 @@ function App() {
         const cards = parsed[zone]
           .map((id) => cardsById.get(id))
           .filter((card): card is YgoCard => Boolean(card))
-        nextDeck[zone] = makeEntriesFromCards(cards)
+        nextDeck[zone] = makeEntriesFromCards(cards, zone)
       }
 
       setDeck(nextDeck)
@@ -1237,7 +1258,10 @@ function App() {
               <div className="deck-zone" key={zone}>
                 <h3>
                   {zoneLabels[zone]}
-                  <span>{deck[zone].reduce((sum, entry) => sum + entry.quantity, 0)}</span>
+                  <span>
+                    {deck[zone].reduce((sum, entry) => sum + entry.quantity, 0)}
+                    /{deckZoneLimits[zone]}
+                  </span>
                 </h3>
                 {deck[zone].length ? (
                   deckViewMode === 'cards' ? (
