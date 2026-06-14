@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.6
+// @version      0.1.7
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
 // @match        https://www.cardmarket.com/*
 // @match        https://www.cardmarket.com/*/YuGiOh/Wants*
@@ -21,7 +21,7 @@
   const hashKey = 'ygo-inventory-wants'
   const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
   const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-  const helperVersion = '0.1.6'
+  const helperVersion = '0.1.7'
   const autoParam = 'ygo-auto'
   const helperLog = []
 
@@ -74,6 +74,13 @@
 
   function normalize(text) {
     return text.replace(/\s+/g, ' ').trim().toLowerCase()
+  }
+
+  function normalizeListName(name) {
+    const cleanName = (name || 'YGOMISSING')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '')
+    return (cleanName || 'YGOMISSING').slice(0, 30)
   }
 
   function remember(message) {
@@ -241,7 +248,7 @@
       setNote(note, 'Auto create: filling list name...')
       const nameInput = await waitFor(() => findTextInput(['name', 'title', 'list', 'description']))
       if (!nameInput) throw new Error('Could not find the Wants list name field.')
-      setNativeValue(nameInput, payload.name)
+      setNativeValue(nameInput, normalizeListName(payload.name))
       await sleep(250)
 
       const createButton = findSubmitButton(['create', 'save'])
@@ -386,7 +393,7 @@
     const nameField = document.getElementById('ygo-helper-name')
     const listField = document.getElementById('ygo-helper-list')
     const note = document.getElementById('ygo-helper-note')
-    nameField.value = safePayload.name || ''
+    nameField.value = normalizeListName(safePayload.name)
     listField.value = safePayload.decklist || ''
     setNote(note, safePayload.name || safePayload.decklist
       ? 'Helper loaded with payload. Auto create will run if ygo-auto=1 is in the URL.'

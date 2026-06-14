@@ -335,9 +335,19 @@ function getSetKind(setName: string) {
 function createTimestampedName(prefix = 'YGO Missing') {
   const date = new Date()
   const pad = (value: number) => String(value).padStart(2, '0')
-  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-  const time = `${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`
-  return `${prefix.trim() || 'YGO Missing'} - ${day} ${time}`
+  const timestamp = [
+    String(date.getFullYear()).slice(-2),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join('')
+  const cleanPrefix = (prefix.trim() || 'YGO Missing')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '')
+  const baseName = cleanPrefix || 'YGOMISSING'
+  return `${baseName}${timestamp}`.slice(0, 30)
 }
 
 function encodePayloadForUrl(payload: unknown) {
