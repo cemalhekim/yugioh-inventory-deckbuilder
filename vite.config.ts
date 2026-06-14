@@ -8,6 +8,7 @@ import type { Plugin } from 'vite'
 
 const defaultDeckDir = '/home/ch/Downloads/KaibaPro 2/deck'
 const repoStatePath = path.resolve(process.cwd(), 'data', 'inventory-backup.json')
+const cardmarketHelperPath = path.resolve(process.cwd(), 'tools', 'cardmarket-wants-helper.user.js')
 const ygoproDir = 'C:\\Yu-Gi-Oh! The Dawn of a New Era'
 const ygoproLauncher = 'YGOPRO Dawn of a New Era Launcher Pro.exe'
 const execFileAsync = promisify(execFile)
@@ -244,7 +245,39 @@ function ygoproLauncherPlugin(): Plugin {
   }
 }
 
+function cardmarketHelperPlugin(): Plugin {
+  return {
+    name: 'cardmarket-helper-userscript',
+    configureServer(server) {
+      server.middlewares.use('/cardmarket-wants-helper.user.js', async (req, res) => {
+        try {
+          if (req.method !== 'GET') {
+            sendJson(res, 405, { error: 'Method not allowed' })
+            return
+          }
+
+          const content = await fs.readFile(cardmarketHelperPath, 'utf8')
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+          res.setHeader('Cache-Control', 'no-store')
+          res.end(content)
+        } catch (error) {
+          sendJson(res, 500, {
+            error: error instanceof Error ? error.message : 'Cardmarket helper failed.',
+          })
+        }
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), kaibaProDecksPlugin(), appStatePlugin(), ygoproLauncherPlugin()],
+  plugins: [
+    react(),
+    kaibaProDecksPlugin(),
+    appStatePlugin(),
+    ygoproLauncherPlugin(),
+    cardmarketHelperPlugin(),
+  ],
 })

@@ -89,7 +89,8 @@ store Cardmarket account passwords.
 The supported workflow is:
 
 1. Build a deck.
-2. Install `tools/cardmarket-wants-helper.user.js` in Tampermonkey.
+2. Click Install Helper in the Missing Cards panel and accept the Tampermonkey
+   install/update screen.
 3. Click Open Cardmarket Wants. The app opens Cardmarket with the helper
    payload in the URL.
 4. Use the injected helper panel on Cardmarket to copy/fill the list name and

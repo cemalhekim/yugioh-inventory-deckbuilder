@@ -642,6 +642,11 @@ function App() {
     setStatus('Cardmarket Wants list name copied.')
   }
 
+  function openCardmarketHelperInstall() {
+    window.open('/cardmarket-wants-helper.user.js', '_blank', 'noopener,noreferrer')
+    setStatus('Opened Cardmarket helper userscript install/update page.')
+  }
+
   function downloadYdk() {
     const blob = new Blob([createYdk(deck, deckName)], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
@@ -1396,6 +1401,9 @@ function App() {
             </label>
             <button type="button" onClick={copyCardmarketListName}>
               Copy Name
+            </button>
+            <button type="button" onClick={openCardmarketHelperInstall}>
+              Install Helper
             </button>
             <button
               type="button"

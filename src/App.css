@@ -650,7 +650,7 @@ button:disabled {
   border-bottom: 1px solid var(--kc-line);
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   padding: 10px 12px;
 }
 
