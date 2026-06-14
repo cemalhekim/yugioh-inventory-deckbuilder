@@ -795,6 +795,29 @@ function App() {
     }
   }
 
+  async function deleteKaibaDeck(fileName: string) {
+    const confirmed = window.confirm(`Delete ${fileName} from the KaibaPro deck folder?`)
+    if (!confirmed) return
+
+    setKaibaStatus(`Deleting ${fileName}...`)
+    try {
+      const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(fileName)}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error(`Could not delete ${fileName}.`)
+
+      if (selectedKaibaDeck === fileName) {
+        setSelectedKaibaDeck('')
+        setKaibaSaveName('')
+      }
+
+      setKaibaStatus(`Deleted ${fileName}.`)
+      await refreshKaibaDecks()
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Delete deck failed.')
+    }
+  }
+
   const saveKaibaDeck = useCallback(async (fileNameOrName: string, quiet = false) => {
     const target = fileNameOrName.trim()
     if (!target) {
@@ -1320,17 +1343,30 @@ function App() {
           <div className="kaiba-deck-list">
             {kaibaDecks.length ? (
               kaibaDecks.map((deckFile) => (
-                <button
+                <div
                   className={
-                    selectedKaibaDeck === deckFile.fileName ? 'selected' : ''
+                    selectedKaibaDeck === deckFile.fileName
+                      ? 'kaiba-deck-row selected'
+                      : 'kaiba-deck-row'
                   }
                   key={deckFile.fileName}
-                  type="button"
-                  onClick={() => void openKaibaDeck(deckFile.fileName)}
                 >
-                  <strong>{deckFile.name}</strong>
-                  <span>{new Date(deckFile.updatedAt).toLocaleString()}</span>
-                </button>
+                  <button
+                    className="kaiba-deck-open"
+                    type="button"
+                    onClick={() => void openKaibaDeck(deckFile.fileName)}
+                  >
+                    <strong>{deckFile.name}</strong>
+                    <span>{new Date(deckFile.updatedAt).toLocaleString()}</span>
+                  </button>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    onClick={() => void deleteKaibaDeck(deckFile.fileName)}
+                  >
+                    Delete
+                  </button>
+                </div>
               ))
             ) : (
               <p className="empty-state">Refresh to list KaibaPro decks.</p>

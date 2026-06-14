@@ -153,6 +153,12 @@ function kaibaProDecksPlugin(): Plugin {
             return
           }
 
+          if (req.method === 'DELETE') {
+            await fs.unlink(deckPath)
+            sendJson(res, 200, { deckDir, fileName, deleted: true })
+            return
+          }
+
           sendJson(res, 405, { error: 'Method not allowed' })
         } catch (error) {
           sendJson(res, 500, {
