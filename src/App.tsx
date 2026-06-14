@@ -79,10 +79,6 @@ const zoneLabels: Record<DeckZone, string> = {
 const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 const cardmarketPayloadHashKey = 'ygo-inventory-wants'
-const tampermonkeyInstallUrl = 'https://www.tampermonkey.net/'
-const cardmarketHelperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
-const cardmarketHelperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-const cardmarketHelperAttribute = 'data-ygo-inventory-cardmarket-helper'
 
 function isExtraDeckCard(card: YgoCard) {
   return ['Fusion', 'Synchro', 'XYZ', 'Xyz', 'Link'].some((type) =>
@@ -334,32 +330,6 @@ function encodePayloadForUrl(payload: unknown) {
   const bytes = new TextEncoder().encode(JSON.stringify(payload))
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
-}
-
-function detectCardmarketHelper() {
-  if (document.documentElement.hasAttribute(cardmarketHelperAttribute)) {
-    return Promise.resolve(true)
-  }
-
-  return new Promise<boolean>((resolve) => {
-    let handled = false
-    const timeout = window.setTimeout(() => {
-      if (handled) return
-      handled = true
-      window.removeEventListener(cardmarketHelperReadyEvent, onReady)
-      resolve(false)
-    }, 1200)
-
-    function onReady() {
-      if (handled) return
-      handled = true
-      window.clearTimeout(timeout)
-      resolve(true)
-    }
-
-    window.addEventListener(cardmarketHelperReadyEvent, onReady, { once: true })
-    window.dispatchEvent(new CustomEvent(cardmarketHelperCheckEvent))
-  })
 }
 
 function App() {
@@ -636,14 +606,7 @@ function App() {
     setStatus('Missing-card list copied for Cardmarket Wants.')
   }
 
-  async function prepareCardmarketWants() {
-    const helperDetected = await detectCardmarketHelper()
-    if (!helperDetected) {
-      window.open(tampermonkeyInstallUrl, '_blank', 'noopener,noreferrer')
-      setStatus('Cardmarket helper script not detected. Opened Tampermonkey install/update page.')
-      return
-    }
-
+  function prepareCardmarketWants() {
     const listName = createTimestampedName(deckName)
     setCardmarketListName(listName)
     void navigator.clipboard.writeText(missingListText)
@@ -657,7 +620,7 @@ function App() {
       '_blank',
       'noopener,noreferrer',
     )
-    setStatus('Cardmarket opened with Tampermonkey helper payload.')
+    setStatus('Cardmarket opened. If the helper script is active, its panel will appear there.')
   }
 
   function copyCardmarketListName() {
@@ -976,7 +939,7 @@ function App() {
           </button>
           <button
             type="button"
-            onClick={() => void prepareCardmarketWants()}
+            onClick={prepareCardmarketWants}
             disabled={!missingEntries.length}
           >
             Open Cardmarket Wants
@@ -1422,7 +1385,7 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => void prepareCardmarketWants()}
+              onClick={prepareCardmarketWants}
               disabled={!missingEntries.length}
             >
               Open Wants
