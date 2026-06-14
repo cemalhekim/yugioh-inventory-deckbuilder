@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.3
+// @version      0.1.4
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
 // @match        https://www.cardmarket.com/*/YuGiOh/Wants*
 // @match        http://localhost/*
@@ -19,7 +19,8 @@
   const hashKey = 'ygo-inventory-wants'
   const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
   const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-  const helperVersion = '0.1.3'
+  const helperVersion = '0.1.4'
+  const autoParam = 'ygo-auto'
 
   document.documentElement.setAttribute('data-ygo-inventory-cardmarket-helper', helperVersion)
 
@@ -67,13 +68,32 @@
     return text.replace(/\s+/g, ' ').trim().toLowerCase()
   }
 
+  function insideHelper(element) {
+    return Boolean(element.closest('#ygo-inventory-cardmarket-helper'))
+  }
+
   function findClickable(labels) {
     const candidates = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]'))
     return candidates.find((element) => {
+      if (insideHelper(element)) return false
       if (!visible(element)) return false
       const text = normalize(element.innerText || element.value || element.getAttribute('aria-label') || '')
       return labels.some((label) => text.includes(label))
     })
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms))
+  }
+
+  async function waitFor(getValue, timeout = 8000, interval = 250) {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < timeout) {
+      const value = getValue()
+      if (value) return value
+      await sleep(interval)
+    }
+    return null
   }
 
   function setNativeValue(element, value) {
@@ -88,7 +108,7 @@
 
   function findTextInput(labels) {
     const fields = Array.from(document.querySelectorAll('input:not([type]), input[type="text"], textarea'))
-      .filter(visible)
+      .filter((field) => visible(field) && !insideHelper(field))
     return fields.find((field) => {
       const clue = normalize([
         field.name,
@@ -103,8 +123,104 @@
 
   function findLargestTextarea() {
     return Array.from(document.querySelectorAll('textarea'))
-      .filter(visible)
+      .filter((field) => visible(field) && !insideHelper(field))
       .sort((a, b) => (b.rows * b.cols) - (a.rows * a.cols))[0]
+  }
+
+  function findSubmitButton(labels = []) {
+    return findClickable([
+      ...labels,
+      'create',
+      'save',
+      'submit',
+      'add',
+      'import',
+      'continue',
+      'ok',
+    ])
+  }
+
+  async function runAutoCreate(payload, note) {
+    if (!payload?.name || !payload?.decklist) {
+      note.textContent = 'Auto create skipped: no YGO Inventory payload was found in the URL.'
+      return
+    }
+
+    const runKey = `ygo-inventory-auto-create-${payload.createdAt || payload.name}`
+    if (window.sessionStorage.getItem(runKey)) {
+      note.textContent = 'Auto create already ran for this payload. Use Auto create to retry.'
+      return
+    }
+    window.sessionStorage.setItem(runKey, '1')
+
+    try {
+      note.textContent = 'Auto create: opening new Wants list form...'
+      const newListButton = await waitFor(() =>
+        findClickable([
+          'new list',
+          'create list',
+          'create wants list',
+          'new wants',
+          'wants list',
+          'add list',
+        ]),
+      )
+      if (newListButton) {
+        newListButton.click()
+        await sleep(700)
+      }
+
+      note.textContent = 'Auto create: filling list name...'
+      const nameInput = await waitFor(() => findTextInput(['name', 'title', 'list']))
+      if (!nameInput) throw new Error('Could not find the Wants list name field.')
+      setNativeValue(nameInput, payload.name)
+      await sleep(250)
+
+      const createButton = findSubmitButton(['create', 'save'])
+      if (createButton) {
+        note.textContent = 'Auto create: creating list...'
+        createButton.click()
+        await sleep(1500)
+      }
+
+      note.textContent = 'Auto create: opening decklist import...'
+      const deckListButton = await waitFor(() =>
+        findClickable([
+          'add deck list',
+          'deck list',
+          'decklist',
+          'add cards',
+          'add want',
+          'add wants',
+          'import',
+        ]),
+      )
+      if (deckListButton) {
+        deckListButton.click()
+        await sleep(700)
+      }
+
+      note.textContent = 'Auto create: filling missing-card decklist...'
+      const deckTextarea = await waitFor(findLargestTextarea)
+      if (!deckTextarea) throw new Error('Could not find the decklist textarea.')
+      setNativeValue(deckTextarea, payload.decklist)
+      await sleep(250)
+
+      const addButton = findSubmitButton(['add deck list', 'add cards', 'add wants', 'import'])
+      if (!addButton) {
+        note.textContent = 'Decklist filled. Could not find the final add/import button.'
+        return
+      }
+
+      note.textContent = 'Auto create: submitting decklist...'
+      addButton.click()
+      await sleep(1000)
+      note.textContent = 'Auto create finished. Check the Wants list before using Shopping Wizard.'
+    } catch (error) {
+      note.textContent = error instanceof Error
+        ? `Auto create stopped: ${error.message}`
+        : 'Auto create stopped.'
+    }
   }
 
   function injectPanel(payload) {
@@ -118,6 +234,7 @@
       <label>List name<input id="ygo-helper-name" readonly></label>
       <label>Deck list<textarea id="ygo-helper-list" readonly></textarea></label>
       <div class="ygo-helper-actions">
+        <button id="ygo-helper-auto-create">Auto create</button>
         <button id="ygo-helper-copy-name">Copy name</button>
         <button id="ygo-helper-copy-list">Copy decklist</button>
         <button id="ygo-helper-fill-name">Fill name field</button>
@@ -201,6 +318,10 @@
 
     document.getElementById('ygo-helper-copy-name').addEventListener('click', () => copyText(nameField.value))
     document.getElementById('ygo-helper-copy-list').addEventListener('click', () => copyText(listField.value))
+    document.getElementById('ygo-helper-auto-create').addEventListener('click', () => {
+      window.sessionStorage.removeItem(`ygo-inventory-auto-create-${safePayload.createdAt || safePayload.name}`)
+      void runAutoCreate(safePayload, note)
+    })
     document.getElementById('ygo-helper-fill-name').addEventListener('click', () => {
       const newListButton = findClickable(['new list', 'create list', 'new wants', 'create wants'])
       newListButton?.click()
@@ -217,6 +338,13 @@
         if (textarea) setNativeValue(textarea, listField.value)
       }, 300)
     })
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get(autoParam) === '1') {
+      window.setTimeout(() => {
+        void runAutoCreate(safePayload, note)
+      }, 800)
+    }
   }
 
   const payload = decodePayload()
