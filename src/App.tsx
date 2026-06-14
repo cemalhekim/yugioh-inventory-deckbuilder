@@ -565,6 +565,12 @@ function App() {
           set.set_code.toLowerCase().includes(normalizedQuery)
         return matchesKind && matchesQuery
       })
+      .sort((a, b) => {
+        const aTime = a.tcg_date ? Date.parse(a.tcg_date) : 0
+        const bTime = b.tcg_date ? Date.parse(b.tcg_date) : 0
+        if (aTime !== bTime) return bTime - aTime
+        return a.set_name.localeCompare(b.set_name)
+      })
       .slice(0, 80)
   }, [productQuery, setKindFilter, sets])
 
