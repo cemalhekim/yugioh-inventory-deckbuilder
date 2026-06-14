@@ -111,7 +111,6 @@
 .topbar-actions,
 .file-actions,
 .row-actions,
-.zone-toggle,
 .inventory-tools,
 .search-tools,
 .set-tools {
@@ -151,7 +150,6 @@ button:disabled {
 
 .topbar-actions > button,
 .row-actions button:last-child,
-.zone-toggle .active,
 .view-toggle .active {
   background: linear-gradient(180deg, rgba(57, 200, 255, 0.95), rgba(20, 91, 210, 0.95));
   border-color: rgba(199, 241, 255, 0.9);
@@ -275,7 +273,6 @@ button:disabled {
   max-width: 260px;
 }
 
-.zone-toggle,
 .inventory-tools,
 .search-tools,
 .set-tools,
@@ -302,10 +299,6 @@ button:disabled {
   font-weight: 800;
   gap: 8px;
   white-space: nowrap;
-}
-
-.zone-toggle button {
-  flex: 1;
 }
 
 .result-list,

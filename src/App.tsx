@@ -6,6 +6,7 @@ type DeckZone = 'main' | 'extra' | 'side'
 type DeckViewMode = 'list' | 'cards'
 type AppPage = 'deck' | 'products'
 type SearchPanelView = 'search' | 'inventory'
+type SearchResultSource = 'search' | 'inventory'
 
 type YgoCard = {
   id: number
@@ -378,7 +379,7 @@ function App() {
   const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
-  const [activeZone, setActiveZone] = useState<DeckZone>('main')
+  const [searchResultSource, setSearchResultSource] = useState<SearchResultSource>('search')
   const [status, setStatus] = useState('Search for a card to start building.')
   const [isSearching, setIsSearching] = useState(false)
   const [sets, setSets] = useState<YgoSet[]>([])
@@ -478,6 +479,7 @@ function App() {
         )
         if (!response.ok) throw new Error('No cards found')
         const payload = (await response.json()) as { data: YgoCard[] }
+        setSearchResultSource('search')
         setResults(sortSearchCards(payload.data).slice(0, 20))
         setStatus(`Found ${payload.data.length} matching cards.`)
       } catch (error) {
@@ -498,6 +500,7 @@ function App() {
 
   function updateQuery(value: string) {
     setQuery(value)
+    setSearchResultSource('search')
     if (value.trim().length < 2) {
       setResults([])
       setStatus('Search for a card to start building.')
@@ -583,7 +586,22 @@ function App() {
   }
 
   function addToDeck(card: YgoCard) {
-    const targetZone = activeZone === 'main' && isExtraDeckCard(card) ? 'extra' : activeZone
+    const targetZone: DeckZone = isExtraDeckCard(card) ? 'extra' : 'main'
+    setDeck((current) => {
+      if (countDeckZoneCards(current, targetZone) >= deckZoneLimits[targetZone]) {
+        setStatus(`${zoneLabels[targetZone]} Deck is already at ${deckZoneLimits[targetZone]} cards.`)
+        return current
+      }
+      if (countDeckCardCopies(current, card.id) >= maxDeckCopies) {
+        setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
+        return current
+      }
+      return addCardCopies(current, targetZone, card)
+    })
+  }
+
+  function addToSideDeck(card: YgoCard) {
+    const targetZone: DeckZone = 'side'
     setDeck((current) => {
       if (countDeckZoneCards(current, targetZone) >= deckZoneLimits[targetZone]) {
         setStatus(`${zoneLabels[targetZone]} Deck is already at ${deckZoneLimits[targetZone]} cards.`)
@@ -760,6 +778,7 @@ function App() {
 
   function listInventoryCards() {
     setQuery('')
+    setSearchResultSource('inventory')
     const cards = sortSearchCards(inventory.map((entry) => entry.card))
     setResults(cards)
     setStatus(`Listed ${cards.length} inventory cards.`)
@@ -1028,18 +1047,6 @@ function App() {
                   List Inventory
                 </button>
               </div>
-              <div className="zone-toggle" aria-label="Target deck zone">
-                {zoneOrder.map((zone) => (
-                  <button
-                    key={zone}
-                    className={activeZone === zone ? 'active' : ''}
-                    type="button"
-                    onClick={() => setActiveZone(zone)}
-                  >
-                    {zoneLabels[zone]}
-                  </button>
-                ))}
-              </div>
               <div className="result-list">
                 {isSearching ? <p className="muted">Searching...</p> : null}
                 {visibleResults.map((card) => (
@@ -1056,11 +1063,16 @@ function App() {
                       </span>
                     </div>
                     <div className="row-actions">
-                      <button type="button" onClick={() => addToInventory(card)}>
-                        + Inv
-                      </button>
+                      {searchResultSource === 'search' ? (
+                        <button type="button" onClick={() => addToInventory(card)}>
+                          + Inv
+                        </button>
+                      ) : null}
                       <button type="button" onClick={() => addToDeck(card)}>
                         + Deck
+                      </button>
+                      <button type="button" onClick={() => addToSideDeck(card)}>
+                        + Side
                       </button>
                     </div>
                   </article>
