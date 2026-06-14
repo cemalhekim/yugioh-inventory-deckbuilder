@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.2
+// @version      0.1.3
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
-// @match        https://www.cardmarket.com/en/YuGiOh/Wants*
+// @match        https://www.cardmarket.com/*/YuGiOh/Wants*
 // @match        http://localhost/*
 // @match        http://127.0.0.1/*
+// @include      https://www.cardmarket.com/*/YuGiOh/Wants*
 // @include      http://localhost:*/*
 // @include      http://127.0.0.1:*/*
+// @run-at       document-end
 // @grant        GM_setClipboard
 // ==/UserScript==
 
@@ -17,7 +19,7 @@
   const hashKey = 'ygo-inventory-wants'
   const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
   const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-  const helperVersion = '0.1.2'
+  const helperVersion = '0.1.3'
 
   document.documentElement.setAttribute('data-ygo-inventory-cardmarket-helper', helperVersion)
 
@@ -30,11 +32,14 @@
   if (!window.location.hostname.includes('cardmarket.com')) return
 
   function decodePayload() {
-    const match = window.location.hash.match(new RegExp(`${hashKey}=([^&]+)`))
-    if (!match) return null
+    const params = new URLSearchParams(window.location.search)
+    const queryPayload = params.get(hashKey)
+    const hashMatch = window.location.hash.match(new RegExp(`${hashKey}=([^&]+)`))
+    const encodedPayload = queryPayload || hashMatch?.[1]
+    if (!encodedPayload) return null
 
     try {
-      const padded = match[1].replace(/-/g, '+').replace(/_/g, '/')
+      const padded = encodedPayload.replace(/-/g, '+').replace(/_/g, '/')
       const binary = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='))
       const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
       return JSON.parse(new TextDecoder().decode(bytes))
@@ -104,6 +109,7 @@
 
   function injectPanel(payload) {
     if (document.getElementById('ygo-inventory-cardmarket-helper')) return
+    const safePayload = payload || {}
 
     const panel = document.createElement('div')
     panel.id = 'ygo-inventory-cardmarket-helper'
@@ -117,7 +123,7 @@
         <button id="ygo-helper-fill-name">Fill name field</button>
         <button id="ygo-helper-fill-list">Fill decklist field</button>
       </div>
-      <div class="ygo-helper-note">Open/create a Wants list on Cardmarket, then use the fill buttons. The script never reads your password.</div>
+      <div class="ygo-helper-note" id="ygo-helper-note"></div>
     `
 
     const style = document.createElement('style')
@@ -186,8 +192,12 @@
 
     const nameField = document.getElementById('ygo-helper-name')
     const listField = document.getElementById('ygo-helper-list')
-    nameField.value = payload.name || ''
-    listField.value = payload.decklist || ''
+    const note = document.getElementById('ygo-helper-note')
+    nameField.value = safePayload.name || ''
+    listField.value = safePayload.decklist || ''
+    note.textContent = safePayload.name || safePayload.decklist
+      ? 'Open/create a Wants list on Cardmarket, then use the fill buttons. The script never reads your password.'
+      : 'Helper is running, but no YGO Inventory payload was found in the URL. Reopen Cardmarket from the app.'
 
     document.getElementById('ygo-helper-copy-name').addEventListener('click', () => copyText(nameField.value))
     document.getElementById('ygo-helper-copy-list').addEventListener('click', () => copyText(listField.value))
@@ -210,8 +220,6 @@
   }
 
   const payload = decodePayload()
-  if (payload?.name || payload?.decklist) {
-    if (document.body) injectPanel(payload)
-    else window.addEventListener('DOMContentLoaded', () => injectPanel(payload))
-  }
+  if (document.body) injectPanel(payload)
+  else window.addEventListener('DOMContentLoaded', () => injectPanel(payload))
 })()

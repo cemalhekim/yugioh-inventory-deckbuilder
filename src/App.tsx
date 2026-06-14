@@ -616,7 +616,7 @@ function App() {
       createdAt: new Date().toISOString(),
     })
     window.open(
-      `${cardmarketWantsUrl}#${cardmarketPayloadHashKey}=${payload}`,
+      `${cardmarketWantsUrl}?${cardmarketPayloadHashKey}=${payload}`,
       '_blank',
       'noopener,noreferrer',
     )
