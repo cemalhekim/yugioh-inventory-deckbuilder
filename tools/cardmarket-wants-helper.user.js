@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.9
+// @version      0.1.10
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
 // @match        https://www.cardmarket.com/*
 // @match        https://www.cardmarket.com/*/YuGiOh/Wants*
@@ -21,7 +21,7 @@
   const hashKey = 'ygo-inventory-wants'
   const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
   const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-  const helperVersion = '0.1.9'
+  const helperVersion = '0.1.10'
   const autoParam = 'ygo-auto'
   const helperLog = []
   const activePayloadKey = 'ygo-inventory-cardmarket-active-payload'
@@ -402,83 +402,12 @@
 
     const panel = document.createElement('div')
     panel.id = 'ygo-inventory-cardmarket-helper'
+    panel.hidden = true
     panel.innerHTML = `
-      <div class="ygo-helper-title">YGO Inventory Wants Helper</div>
-      <label>List name<input id="ygo-helper-name" readonly></label>
-      <label>Deck list<textarea id="ygo-helper-list" readonly></textarea></label>
-      <div class="ygo-helper-actions">
-        <button id="ygo-helper-auto-create">Auto create</button>
-        <button id="ygo-helper-copy-debug">Copy debug</button>
-        <button id="ygo-helper-copy-name">Copy name</button>
-        <button id="ygo-helper-copy-list">Copy decklist</button>
-        <button id="ygo-helper-fill-name">Fill name field</button>
-        <button id="ygo-helper-fill-list">Fill decklist field</button>
-      </div>
-      <div class="ygo-helper-note" id="ygo-helper-note"></div>
+      <input id="ygo-helper-name" readonly>
+      <textarea id="ygo-helper-list" readonly></textarea>
+      <div id="ygo-helper-note"></div>
     `
-
-    const style = document.createElement('style')
-    style.textContent = `
-      #ygo-inventory-cardmarket-helper {
-        position: fixed;
-        right: 18px;
-        bottom: 18px;
-        z-index: 999999;
-        width: min(420px, calc(100vw - 36px));
-        padding: 14px;
-        border: 1px solid #39c8ff;
-        border-radius: 8px;
-        background: #07101f;
-        color: #eaf7ff;
-        box-shadow: 0 0 28px rgba(45, 170, 255, 0.35);
-        font: 13px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-      #ygo-inventory-cardmarket-helper .ygo-helper-title {
-        color: #39c8ff;
-        font-weight: 800;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-      }
-      #ygo-inventory-cardmarket-helper label {
-        display: grid;
-        gap: 4px;
-        margin: 8px 0;
-      }
-      #ygo-inventory-cardmarket-helper input,
-      #ygo-inventory-cardmarket-helper textarea {
-        width: 100%;
-        border: 1px solid rgba(57, 200, 255, 0.55);
-        border-radius: 4px;
-        background: #030a14;
-        color: #eaf7ff;
-        padding: 8px;
-        font: inherit;
-      }
-      #ygo-inventory-cardmarket-helper textarea {
-        height: 120px;
-        resize: vertical;
-      }
-      #ygo-inventory-cardmarket-helper .ygo-helper-actions {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
-      }
-      #ygo-inventory-cardmarket-helper button {
-        border: 1px solid rgba(57, 200, 255, 0.65);
-        border-radius: 4px;
-        background: linear-gradient(180deg, #39c8ff, #1f6fff);
-        color: #03101d;
-        cursor: pointer;
-        font-weight: 800;
-        padding: 8px;
-      }
-      #ygo-inventory-cardmarket-helper .ygo-helper-note {
-        color: #8fb4cf;
-        margin-top: 10px;
-      }
-    `
-
-    document.documentElement.appendChild(style)
     document.body.appendChild(panel)
 
     const nameField = document.getElementById('ygo-helper-name')
@@ -490,17 +419,17 @@
       ? 'Helper loaded with payload. Auto create will run if ygo-auto=1 is in the URL.'
       : 'Helper is running, but no YGO Inventory payload was found in the URL. Reopen Cardmarket from the app.')
 
-    document.getElementById('ygo-helper-copy-name').addEventListener('click', () => copyText(nameField.value))
-    document.getElementById('ygo-helper-copy-list').addEventListener('click', () => copyText(listField.value))
-    document.getElementById('ygo-helper-copy-debug').addEventListener('click', () => {
+    document.getElementById('ygo-helper-copy-name')?.addEventListener('click', () => copyText(nameField.value))
+    document.getElementById('ygo-helper-copy-list')?.addEventListener('click', () => copyText(listField.value))
+    document.getElementById('ygo-helper-copy-debug')?.addEventListener('click', () => {
       copyText(collectDebug(safePayload))
       setNote(note, 'Debug info copied. Send it back so selectors can be tightened.')
     })
-    document.getElementById('ygo-helper-auto-create').addEventListener('click', () => {
+    document.getElementById('ygo-helper-auto-create')?.addEventListener('click', () => {
       window.sessionStorage.removeItem(`ygo-inventory-auto-create-${safePayload.createdAt || safePayload.name}`)
       void runAutoCreate(safePayload, note)
     })
-    document.getElementById('ygo-helper-fill-name').addEventListener('click', () => {
+    document.getElementById('ygo-helper-fill-name')?.addEventListener('click', () => {
       const newListButton = findClickable(['new list', 'create list', 'new wants', 'create wants'])
       newListButton?.click()
       window.setTimeout(() => {
@@ -508,7 +437,7 @@
         if (input) setNativeValue(input, nameField.value)
       }, 300)
     })
-    document.getElementById('ygo-helper-fill-list').addEventListener('click', () => {
+    document.getElementById('ygo-helper-fill-list')?.addEventListener('click', () => {
       const addDeckButton = findClickable(['add deck list', 'deck list', 'decklist'])
       addDeckButton?.click()
       window.setTimeout(() => {
