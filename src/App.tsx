@@ -170,6 +170,14 @@ function sortDeckEntries(entries: DeckEntry[]) {
   })
 }
 
+function sortDeckState(deck: DeckState): DeckState {
+  return {
+    main: sortDeckEntries(deck.main),
+    extra: sortDeckEntries(deck.extra),
+    side: sortDeckEntries(deck.side),
+  }
+}
+
 function loadState(): PersistedState {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) {
@@ -186,7 +194,7 @@ function loadState(): PersistedState {
 function normalizeState(state: Partial<PersistedState>): PersistedState {
   return {
     inventory: state.inventory ?? [],
-    deck: { ...emptyDeck, ...state.deck },
+    deck: sortDeckState({ ...emptyDeck, ...state.deck }),
     deckName: state.deckName ?? 'Untitled Deck',
   }
 }
@@ -819,7 +827,7 @@ function App() {
         nextDeck[zone] = makeEntriesFromCards(cards, zone)
       }
 
-      setDeck(nextDeck)
+      setDeck(sortDeckState(nextDeck))
       setDeckName(payload.name)
       setSelectedKaibaDeck(payload.fileName)
       setKaibaSaveName(payload.name)
@@ -882,7 +890,7 @@ function App() {
         nextDeck[zone] = makeEntriesFromCards(cards, zone)
       }
 
-      setDeck(nextDeck)
+      setDeck(sortDeckState(nextDeck))
       setDeckName(file.name.replace(/\.ydk$/i, '') || 'Imported Deck')
       setStatus(`Imported ${allIds.length} cards from ${file.name}.`)
     } catch (error) {
@@ -938,7 +946,7 @@ function App() {
     try {
       const parsed = JSON.parse(await file.text()) as PersistedState
       setInventory(parsed.inventory ?? [])
-      setDeck({ ...emptyDeck, ...parsed.deck })
+      setDeck(sortDeckState({ ...emptyDeck, ...parsed.deck }))
       setDeckName(parsed.deckName ?? 'Imported Deck')
       setStatus('Backup imported.')
     } catch {
