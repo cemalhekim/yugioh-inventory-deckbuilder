@@ -6525,8 +6525,8 @@
           ],
           "card_prices": [
             {
-              "cardmarket_price": "0.47",
-              "tcgplayer_price": "0.42",
+              "cardmarket_price": "0.45",
+              "tcgplayer_price": "0.38",
               "ebay_price": "4.99",
               "amazon_price": "0.20",
               "coolstuffinc_price": "7.99"
@@ -6918,18 +6918,12 @@
               "image_url": "https://images.ygoprodeck.com/images/cards/94145021.jpg",
               "image_url_small": "https://images.ygoprodeck.com/images/cards_small/94145021.jpg",
               "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/94145021.jpg"
-            },
-            {
-              "id": 94145022,
-              "image_url": "https://images.ygoprodeck.com/images/cards/94145022.jpg",
-              "image_url_small": "https://images.ygoprodeck.com/images/cards_small/94145022.jpg",
-              "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/94145022.jpg"
             }
           ],
           "card_prices": [
             {
-              "cardmarket_price": "0.39",
-              "tcgplayer_price": "0.74",
+              "cardmarket_price": "0.51",
+              "tcgplayer_price": "0.78",
               "ebay_price": "4.00",
               "amazon_price": "18.48",
               "coolstuffinc_price": "2.99"

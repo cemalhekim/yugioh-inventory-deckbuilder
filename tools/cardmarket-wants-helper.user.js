@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.4
+// @version      0.1.5
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
 // @match        https://www.cardmarket.com/*/YuGiOh/Wants*
 // @match        http://localhost/*
@@ -19,8 +19,9 @@
   const hashKey = 'ygo-inventory-wants'
   const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
   const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-  const helperVersion = '0.1.4'
+  const helperVersion = '0.1.5'
   const autoParam = 'ygo-auto'
+  const helperLog = []
 
   document.documentElement.setAttribute('data-ygo-inventory-cardmarket-helper', helperVersion)
 
@@ -68,8 +69,34 @@
     return text.replace(/\s+/g, ' ').trim().toLowerCase()
   }
 
+  function remember(message) {
+    const line = `[${new Date().toLocaleTimeString()}] ${message}`
+    helperLog.push(line)
+    console.info(`[YGO Inventory Helper] ${message}`)
+  }
+
+  function setNote(note, message) {
+    remember(message)
+    note.textContent = message
+  }
+
   function insideHelper(element) {
     return Boolean(element.closest('#ygo-inventory-cardmarket-helper'))
+  }
+
+  function elementClue(element) {
+    return normalize([
+      element.innerText,
+      element.value,
+      element.getAttribute('aria-label'),
+      element.getAttribute('title'),
+      element.getAttribute('href'),
+      element.getAttribute('name'),
+      element.getAttribute('id'),
+      element.getAttribute('class'),
+      element.getAttribute('data-bs-target'),
+      element.getAttribute('data-target'),
+    ].filter(Boolean).join(' '))
   }
 
   function findClickable(labels) {
@@ -77,8 +104,8 @@
     return candidates.find((element) => {
       if (insideHelper(element)) return false
       if (!visible(element)) return false
-      const text = normalize(element.innerText || element.value || element.getAttribute('aria-label') || '')
-      return labels.some((label) => text.includes(label))
+      const clue = elementClue(element)
+      return labels.some((label) => clue.includes(label))
     })
   }
 
@@ -107,7 +134,7 @@
   }
 
   function findTextInput(labels) {
-    const fields = Array.from(document.querySelectorAll('input:not([type]), input[type="text"], textarea'))
+    const fields = Array.from(document.querySelectorAll('input:not([type]), input[type="text"], input[type="search"], textarea'))
       .filter((field) => visible(field) && !insideHelper(field))
     return fields.find((field) => {
       const clue = normalize([
@@ -140,21 +167,49 @@
     ])
   }
 
+  function collectDebug(payload) {
+    const clickables = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]'))
+      .filter((element) => visible(element) && !insideHelper(element))
+      .slice(0, 60)
+      .map((element, index) => `${index + 1}. ${element.tagName.toLowerCase()} :: ${elementClue(element).slice(0, 220)}`)
+
+    const fields = Array.from(document.querySelectorAll('input, textarea, select'))
+      .filter((element) => visible(element) && !insideHelper(element))
+      .slice(0, 60)
+      .map((element, index) => `${index + 1}. ${element.tagName.toLowerCase()}[type="${element.getAttribute('type') || ''}"] :: ${elementClue(element).slice(0, 220)}`)
+
+    return [
+      `version=${helperVersion}`,
+      `url=${window.location.href}`,
+      `payloadName=${payload?.name || ''}`,
+      `payloadDecklistLength=${payload?.decklist?.length || 0}`,
+      '',
+      'log:',
+      ...helperLog,
+      '',
+      'clickables:',
+      ...clickables,
+      '',
+      'fields:',
+      ...fields,
+    ].join('\n')
+  }
+
   async function runAutoCreate(payload, note) {
     if (!payload?.name || !payload?.decklist) {
-      note.textContent = 'Auto create skipped: no YGO Inventory payload was found in the URL.'
+      setNote(note, 'Auto create skipped: no YGO Inventory payload was found in the URL.')
       return
     }
 
     const runKey = `ygo-inventory-auto-create-${payload.createdAt || payload.name}`
     if (window.sessionStorage.getItem(runKey)) {
-      note.textContent = 'Auto create already ran for this payload. Use Auto create to retry.'
+      setNote(note, 'Auto create already ran for this payload. Use Auto create to retry.')
       return
     }
     window.sessionStorage.setItem(runKey, '1')
 
     try {
-      note.textContent = 'Auto create: opening new Wants list form...'
+      setNote(note, 'Auto create: opening new Wants list form...')
       const newListButton = await waitFor(() =>
         findClickable([
           'new list',
@@ -162,64 +217,77 @@
           'create wants list',
           'new wants',
           'wants list',
+          'want list',
           'add list',
+          'new',
+          'plus',
+          '+',
         ]),
       )
       if (newListButton) {
         newListButton.click()
         await sleep(700)
+      } else {
+        remember('No new-list button found; trying to fill any visible form on the current page.')
       }
 
-      note.textContent = 'Auto create: filling list name...'
-      const nameInput = await waitFor(() => findTextInput(['name', 'title', 'list']))
+      setNote(note, 'Auto create: filling list name...')
+      const nameInput = await waitFor(() => findTextInput(['name', 'title', 'list', 'description']))
       if (!nameInput) throw new Error('Could not find the Wants list name field.')
       setNativeValue(nameInput, payload.name)
       await sleep(250)
 
       const createButton = findSubmitButton(['create', 'save'])
       if (createButton) {
-        note.textContent = 'Auto create: creating list...'
+        setNote(note, 'Auto create: creating list...')
         createButton.click()
         await sleep(1500)
+      } else {
+        remember('No create/save button found after filling list name.')
       }
 
-      note.textContent = 'Auto create: opening decklist import...'
+      setNote(note, 'Auto create: opening decklist import...')
       const deckListButton = await waitFor(() =>
         findClickable([
           'add deck list',
           'deck list',
           'decklist',
+          'deck-list',
           'add cards',
           'add want',
           'add wants',
           'import',
+          'bulk',
+          'paste',
         ]),
       )
       if (deckListButton) {
         deckListButton.click()
         await sleep(700)
+      } else {
+        remember('No decklist/import button found; trying to fill any visible textarea.')
       }
 
-      note.textContent = 'Auto create: filling missing-card decklist...'
+      setNote(note, 'Auto create: filling missing-card decklist...')
       const deckTextarea = await waitFor(findLargestTextarea)
       if (!deckTextarea) throw new Error('Could not find the decklist textarea.')
       setNativeValue(deckTextarea, payload.decklist)
       await sleep(250)
 
-      const addButton = findSubmitButton(['add deck list', 'add cards', 'add wants', 'import'])
+      const addButton = findSubmitButton(['add deck list', 'add cards', 'add wants', 'import', 'submit'])
       if (!addButton) {
-        note.textContent = 'Decklist filled. Could not find the final add/import button.'
+        setNote(note, 'Decklist filled. Could not find the final add/import button.')
         return
       }
 
-      note.textContent = 'Auto create: submitting decklist...'
+      setNote(note, 'Auto create: submitting decklist...')
       addButton.click()
       await sleep(1000)
-      note.textContent = 'Auto create finished. Check the Wants list before using Shopping Wizard.'
+      setNote(note, 'Auto create finished. Check the Wants list before using Shopping Wizard.')
     } catch (error) {
-      note.textContent = error instanceof Error
+      setNote(note, error instanceof Error
         ? `Auto create stopped: ${error.message}`
-        : 'Auto create stopped.'
+        : 'Auto create stopped.')
     }
   }
 
@@ -235,6 +303,7 @@
       <label>Deck list<textarea id="ygo-helper-list" readonly></textarea></label>
       <div class="ygo-helper-actions">
         <button id="ygo-helper-auto-create">Auto create</button>
+        <button id="ygo-helper-copy-debug">Copy debug</button>
         <button id="ygo-helper-copy-name">Copy name</button>
         <button id="ygo-helper-copy-list">Copy decklist</button>
         <button id="ygo-helper-fill-name">Fill name field</button>
@@ -312,12 +381,16 @@
     const note = document.getElementById('ygo-helper-note')
     nameField.value = safePayload.name || ''
     listField.value = safePayload.decklist || ''
-    note.textContent = safePayload.name || safePayload.decklist
-      ? 'Open/create a Wants list on Cardmarket, then use the fill buttons. The script never reads your password.'
-      : 'Helper is running, but no YGO Inventory payload was found in the URL. Reopen Cardmarket from the app.'
+    setNote(note, safePayload.name || safePayload.decklist
+      ? 'Helper loaded with payload. Auto create will run if ygo-auto=1 is in the URL.'
+      : 'Helper is running, but no YGO Inventory payload was found in the URL. Reopen Cardmarket from the app.')
 
     document.getElementById('ygo-helper-copy-name').addEventListener('click', () => copyText(nameField.value))
     document.getElementById('ygo-helper-copy-list').addEventListener('click', () => copyText(listField.value))
+    document.getElementById('ygo-helper-copy-debug').addEventListener('click', () => {
+      copyText(collectDebug(safePayload))
+      setNote(note, 'Debug info copied. Send it back so selectors can be tightened.')
+    })
     document.getElementById('ygo-helper-auto-create').addEventListener('click', () => {
       window.sessionStorage.removeItem(`ygo-inventory-auto-create-${safePayload.createdAt || safePayload.name}`)
       void runAutoCreate(safePayload, note)
