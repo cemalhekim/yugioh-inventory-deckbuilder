@@ -675,9 +675,9 @@ button:disabled {
   align-items: center;
   border-bottom: 1px solid rgba(90, 190, 255, 0.2);
   display: grid;
-  gap: 8px;
-  grid-template-columns: 38px 34px minmax(0, 1fr) auto auto;
-  min-height: 46px;
+  gap: 10px;
+  grid-template-columns: 54px 34px minmax(0, 1fr) auto auto;
+  min-height: 76px;
   padding: 8px 10px;
 }
 
@@ -686,9 +686,9 @@ button:disabled {
   border: 1px solid rgba(90, 190, 255, 0.24);
   border-radius: 4px;
   cursor: pointer;
-  height: 44px;
+  height: 70px;
   object-fit: cover;
-  width: 30px;
+  width: 48px;
 }
 
 .line-item span {
@@ -755,11 +755,17 @@ button:disabled {
 }
 
 .inventory-item {
-  grid-template-columns: 34px minmax(0, 1fr) 36px 36px;
+  grid-template-columns: 54px 34px minmax(0, 1fr) 36px 36px;
 }
 
 .set-card-item {
-  grid-template-columns: 42px minmax(0, 1fr) auto 36px;
+  grid-template-columns: 86px 42px minmax(0, 1fr) auto 36px;
+  min-height: 120px;
+}
+
+.set-card-item .line-thumb {
+  height: 108px;
+  width: 74px;
 }
 
 .empty-state,
