@@ -376,7 +376,6 @@ function App() {
   const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
-  const [onlyInventoryResults, setOnlyInventoryResults] = useState(false)
   const [activeZone, setActiveZone] = useState<DeckZone>('main')
   const [status, setStatus] = useState('Search for a card to start building.')
   const [isSearching, setIsSearching] = useState(false)
@@ -507,10 +506,7 @@ function App() {
     return new Map(inventory.map((entry) => [entry.card.id, entry.quantity]))
   }, [inventory])
 
-  const visibleResults = useMemo(() => {
-    if (!onlyInventoryResults) return results
-    return results.filter((card) => (inventoryById.get(card.id) ?? 0) > 0)
-  }, [inventoryById, onlyInventoryResults, results])
+  const visibleResults = results
 
   const deckTotals = useMemo(() => {
     const totals = new Map<number, { card: YgoCard; quantity: number }>()
@@ -633,11 +629,6 @@ function App() {
     setStatus('Deck sorted by card type and name.')
   }
 
-  function copyMissingList() {
-    void navigator.clipboard.writeText(missingListText)
-    setStatus('Missing-card list copied for Cardmarket Wants.')
-  }
-
   function prepareCardmarketWants() {
     const listName = createTimestampedName(deckName)
     setCardmarketListName(listName)
@@ -652,28 +643,7 @@ function App() {
       '_blank',
       'noopener,noreferrer',
     )
-    setStatus('Cardmarket opened. If the helper script is active, its panel will appear there.')
-  }
-
-  function copyCardmarketListName() {
-    void navigator.clipboard.writeText(cardmarketListName)
-    setStatus('Cardmarket Wants list name copied.')
-  }
-
-  function openCardmarketHelperInstall() {
-    window.open('/cardmarket-wants-helper.user.js', '_blank', 'noopener,noreferrer')
-    setStatus('Opened Cardmarket helper userscript install/update page.')
-  }
-
-  function downloadYdk() {
-    const blob = new Blob([createYdk(deck, deckName)], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${deckName.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'deck'}.ydk`
-    link.click()
-    URL.revokeObjectURL(url)
-    setStatus('YDK exported.')
+    setStatus('Cardmarket opened.')
   }
 
   async function launchYgopro() {
@@ -786,23 +756,11 @@ function App() {
     }
   }
 
-  async function listAllCards() {
+  function listInventoryCards() {
     setQuery('')
-    setStatus('Loading all cards...')
-    setIsSearching(true)
-    try {
-      const response = await fetch('https://db.ygoprodeck.com/api/v7/cardinfo.php')
-      if (!response.ok) throw new Error('Could not load all cards.')
-      const payload = (await response.json()) as { data: YgoCard[] }
-      const cards = sortSearchCards(payload.data)
-      setResults(cards)
-      setStatus(`Listed ${cards.length} cards.`)
-    } catch (error) {
-      setResults([])
-      setStatus(error instanceof Error ? error.message : 'List all failed.')
-    } finally {
-      setIsSearching(false)
-    }
+    const cards = sortSearchCards(inventory.map((entry) => entry.card))
+    setResults(cards)
+    setStatus(`Listed ${cards.length} inventory cards.`)
   }
 
   async function openKaibaDeck(fileName: string) {
@@ -970,17 +928,6 @@ function App() {
           <button type="button" onClick={() => void launchYgopro()}>
             Launch YGOPRO
           </button>
-          <button type="button" onClick={downloadYdk}>Download YDK</button>
-          <button type="button" onClick={copyMissingList} disabled={!missingEntries.length}>
-            Copy Missing
-          </button>
-          <button
-            type="button"
-            onClick={prepareCardmarketWants}
-            disabled={!missingEntries.length}
-          >
-            Open Cardmarket Wants
-          </button>
         </div>
       </header>
 
@@ -1036,17 +983,9 @@ function App() {
                 placeholder="Search by card name"
               />
               <div className="search-tools">
-                <button type="button" onClick={() => void listAllCards()} disabled={isSearching}>
-                  List All
+                <button type="button" onClick={listInventoryCards} disabled={isSearching}>
+                  List Inventory
                 </button>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={onlyInventoryResults}
-                    onChange={(event) => setOnlyInventoryResults(event.target.checked)}
-                  />
-                  Only inventory
-                </label>
               </div>
               <div className="zone-toggle" aria-label="Target deck zone">
                 {zoneOrder.map((zone) => (
@@ -1062,9 +1001,6 @@ function App() {
               </div>
               <div className="result-list">
                 {isSearching ? <p className="muted">Searching...</p> : null}
-                {onlyInventoryResults && results.length && !visibleResults.length ? (
-                  <p className="empty-state">No listed cards are in your inventory.</p>
-                ) : null}
                 {visibleResults.map((card) => (
                   <article className="card-result" key={card.id}>
                     <img
@@ -1076,9 +1012,6 @@ function App() {
                       <strong>{card.name}</strong>
                       <span>
                         {card.type}
-                        {onlyInventoryResults
-                          ? ` - owned ${inventoryById.get(card.id) ?? 0}`
-                          : ''}
                       </span>
                     </div>
                     <div className="row-actions">
@@ -1409,7 +1342,7 @@ function App() {
           <div className="panel-heading">
             <div>
               <h2>Missing Cards</h2>
-              <p>Install the local Cardmarket helper userscript for fill controls.</p>
+              <p>Open Cardmarket with the missing cards from this deck.</p>
             </div>
           </div>
           <div className="cardmarket-prep">
@@ -1417,12 +1350,6 @@ function App() {
               Wants list name
               <input readOnly value={cardmarketListName} />
             </label>
-            <button type="button" onClick={copyCardmarketListName}>
-              Copy Name
-            </button>
-            <button type="button" onClick={openCardmarketHelperInstall}>
-              Install Helper
-            </button>
             <button
               type="button"
               onClick={prepareCardmarketWants}
