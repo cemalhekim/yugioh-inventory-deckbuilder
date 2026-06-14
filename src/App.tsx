@@ -120,12 +120,22 @@ function getDeckSortRank(card: YgoCard) {
   return 900
 }
 
+function getExtraDeckSortRank(card: YgoCard) {
+  const type = card.type.toLowerCase()
+
+  if (type.includes('fusion')) return 0
+  if (type.includes('synchro')) return 1
+  if (type.includes('xyz')) return 2
+  if (type.includes('link')) return 3
+  return 9
+}
+
 function getSearchSortRank(card: YgoCard) {
   const type = card.type.toLowerCase()
 
   if (type.includes('normal monster')) return 10
   if (type.includes('ritual')) return 30
-  if (isExtraDeckCard(card)) return 40
+  if (isExtraDeckCard(card)) return 40 + getExtraDeckSortRank(card)
   if (type.includes('spell')) return 50
   if (type.includes('trap')) return 60
   if (type.includes('monster')) return 20
@@ -148,6 +158,10 @@ function sortDeckEntries(entries: DeckEntry[]) {
   return [...entries].sort((a, b) => {
     const rankDiff = getDeckSortRank(a.card) - getDeckSortRank(b.card)
     if (rankDiff) return rankDiff
+
+    if (isExtraDeckCard(a.card) && isExtraDeckCard(b.card)) {
+      return a.card.name.localeCompare(b.card.name)
+    }
 
     const subtypeDiff = (a.card.race ?? '').localeCompare(b.card.race ?? '')
     if (subtypeDiff) return subtypeDiff
