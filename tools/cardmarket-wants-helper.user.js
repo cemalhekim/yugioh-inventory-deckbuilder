@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.8
+// @version      0.1.9
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
 // @match        https://www.cardmarket.com/*
 // @match        https://www.cardmarket.com/*/YuGiOh/Wants*
@@ -21,11 +21,12 @@
   const hashKey = 'ygo-inventory-wants'
   const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
   const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-  const helperVersion = '0.1.8'
+  const helperVersion = '0.1.9'
   const autoParam = 'ygo-auto'
   const helperLog = []
   const activePayloadKey = 'ygo-inventory-cardmarket-active-payload'
   const activeStepKey = 'ygo-inventory-cardmarket-active-step'
+  const clickOncePrefix = 'ygo-inventory-cardmarket-clicked'
 
   document.documentElement.setAttribute('data-ygo-inventory-cardmarket-helper', helperVersion)
   console.info(`[YGO Inventory Helper] loaded ${helperVersion} on ${window.location.href}`)
@@ -222,6 +223,28 @@
     ])
   }
 
+  function getWorkflowId(payload) {
+    return [
+      normalizeListName(payload?.name),
+      payload?.createdAt || '',
+    ].join('-')
+  }
+
+  function getClickOnceKey(payload, action) {
+    return `${clickOncePrefix}-${getWorkflowId(payload)}-${action}`
+  }
+
+  function wasClicked(payload, action) {
+    return window.sessionStorage.getItem(getClickOnceKey(payload, action)) === '1'
+  }
+
+  function clickOnce(payload, action, element) {
+    if (wasClicked(payload, action)) return false
+    window.sessionStorage.setItem(getClickOnceKey(payload, action), '1')
+    element.click()
+    return true
+  }
+
   function collectDebug(payload) {
     const clickables = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]'))
       .filter((element) => visible(element) && !insideHelper(element))
@@ -266,6 +289,13 @@
     window.sessionStorage.setItem(activePayloadKey, JSON.stringify(payload))
 
     try {
+      if (activeStep === 'back-to-list' && wasClicked(payload, 'back-to-list')) {
+        window.sessionStorage.removeItem(activeStepKey)
+        window.sessionStorage.removeItem(activePayloadKey)
+        setNote(note, 'Auto create finished. Check the Wants list before using Shopping Wizard.')
+        return
+      }
+
       let deckListButton = findDeckListButton()
       let alreadyOnDeckListForm = Boolean(findLargestTextarea())
 
@@ -315,8 +345,11 @@
         deckListButton = await waitFor(findDeckListButton)
         if (deckListButton) {
           window.sessionStorage.setItem(activeStepKey, 'submit-deck-list')
-          deckListButton.click()
-          await sleep(700)
+          if (clickOnce(payload, 'add-deck-list', deckListButton)) {
+            await sleep(700)
+          } else {
+            remember('Add Deck List was already clicked for this payload.')
+          }
         } else {
           remember('No decklist/import button found; trying to fill any visible textarea.')
         }
@@ -330,6 +363,7 @@
 
       const addButton = findSubmitButton(['add deck list', 'add cards', 'add wants', 'import', 'submit'])
       if (!addButton) {
+        window.sessionStorage.removeItem(activeStepKey)
         setNote(note, 'Decklist filled. Could not find the final add/import button.')
         return
       }
@@ -342,8 +376,11 @@
       const backButton = await waitFor(findBackToWantsListButton, 6000)
       if (backButton) {
         setNote(note, 'Auto create: returning to Wants list...')
-        backButton.click()
-        await sleep(700)
+        if (clickOnce(payload, 'back-to-list', backButton)) {
+          await sleep(700)
+        } else {
+          remember('Back to your wants list was already clicked for this payload.')
+        }
       } else {
         remember('No Back to your wants list link found after submitting decklist.')
       }
@@ -355,6 +392,7 @@
       setNote(note, error instanceof Error
         ? `Auto create stopped: ${error.message}`
         : 'Auto create stopped.')
+      window.sessionStorage.removeItem(activeStepKey)
     }
   }
 
