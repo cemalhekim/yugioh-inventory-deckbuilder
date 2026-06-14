@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YGO Inventory Cardmarket Wants Helper
 // @namespace    https://github.com/cemalhekim/yugioh-inventory-deckbuilder
-// @version      0.1.7
+// @version      0.1.8
 // @description  Reads YGO Inventory payloads on Cardmarket Wants and helps create/fill a Wants list while you stay logged in normally.
 // @match        https://www.cardmarket.com/*
 // @match        https://www.cardmarket.com/*/YuGiOh/Wants*
@@ -21,9 +21,11 @@
   const hashKey = 'ygo-inventory-wants'
   const helperCheckEvent = 'ygo-inventory-cardmarket-helper-check'
   const helperReadyEvent = 'ygo-inventory-cardmarket-helper-ready'
-  const helperVersion = '0.1.7'
+  const helperVersion = '0.1.8'
   const autoParam = 'ygo-auto'
   const helperLog = []
+  const activePayloadKey = 'ygo-inventory-cardmarket-active-payload'
+  const activeStepKey = 'ygo-inventory-cardmarket-active-step'
 
   document.documentElement.setAttribute('data-ygo-inventory-cardmarket-helper', helperVersion)
   console.info(`[YGO Inventory Helper] loaded ${helperVersion} on ${window.location.href}`)
@@ -74,6 +76,21 @@
 
   function normalize(text) {
     return text.replace(/\s+/g, ' ').trim().toLowerCase()
+  }
+
+  function getPayload() {
+    const payload = decodePayload()
+    if (payload?.name || payload?.decklist) {
+      window.sessionStorage.setItem(activePayloadKey, JSON.stringify(payload))
+      return payload
+    }
+
+    try {
+      const savedPayload = JSON.parse(window.sessionStorage.getItem(activePayloadKey) || 'null')
+      return savedPayload && typeof savedPayload === 'object' ? savedPayload : null
+    } catch {
+      return null
+    }
   }
 
   function normalizeListName(name) {
@@ -181,6 +198,30 @@
     ])
   }
 
+  function findDeckListButton() {
+    return findClickable([
+      'add deck list',
+      'deck list',
+      'decklist',
+      'deck-list',
+      'add cards',
+      'add want',
+      'add wants',
+      'import',
+      'bulk',
+      'paste',
+    ])
+  }
+
+  function findBackToWantsListButton() {
+    return findClickable([
+      'back to your wants list',
+      'back to wants list',
+      'back to list',
+      'wants list',
+    ])
+  }
+
   function collectDebug(payload) {
     const clickables = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]'))
       .filter((element) => visible(element) && !insideHelper(element))
@@ -216,70 +257,69 @@
     }
 
     const runKey = `ygo-inventory-auto-create-${payload.createdAt || payload.name}`
-    if (window.sessionStorage.getItem(runKey)) {
+    const activeStep = window.sessionStorage.getItem(activeStepKey)
+    if (window.sessionStorage.getItem(runKey) && !activeStep) {
       setNote(note, 'Auto create already ran for this payload. Use Auto create to retry.')
       return
     }
     window.sessionStorage.setItem(runKey, '1')
+    window.sessionStorage.setItem(activePayloadKey, JSON.stringify(payload))
 
     try {
-      setNote(note, 'Auto create: opening new Wants list form...')
-      const newListButton = await waitFor(() =>
-        findClickable([
-          'new list',
-          'create list',
-          'create wants list',
-          'new wants',
-          'wants list',
-          'want list',
-          'add list',
-          'new',
-          'plus',
-          '+',
-        ]),
-      )
-      if (newListButton) {
-        newListButton.click()
-        await sleep(700)
-      } else {
-        remember('No new-list button found; trying to fill any visible form on the current page.')
+      let deckListButton = findDeckListButton()
+      let alreadyOnDeckListForm = Boolean(findLargestTextarea())
+
+      if (!deckListButton && !alreadyOnDeckListForm) {
+        setNote(note, 'Auto create: opening new Wants list form...')
+        const newListButton = await waitFor(() =>
+          findClickable([
+            'new list',
+            'create list',
+            'create wants list',
+            'new wants',
+            'wants list',
+            'want list',
+            'add list',
+            'new',
+            'plus',
+            '+',
+          ]),
+        )
+        if (newListButton) {
+          newListButton.click()
+          await sleep(700)
+        } else {
+          remember('No new-list button found; trying to fill any visible form on the current page.')
+        }
+
+        setNote(note, 'Auto create: filling list name...')
+        const nameInput = await waitFor(() => findTextInput(['name', 'title', 'list', 'description']))
+        if (!nameInput) throw new Error('Could not find the Wants list name field.')
+        setNativeValue(nameInput, normalizeListName(payload.name))
+        await sleep(250)
+
+        const createButton = findSubmitButton(['create', 'save', 'add list'])
+        if (createButton) {
+          setNote(note, 'Auto create: creating list...')
+          window.sessionStorage.setItem(activeStepKey, 'add-deck-list')
+          createButton.click()
+          await sleep(1800)
+        } else {
+          remember('No create/save button found after filling list name.')
+        }
       }
 
-      setNote(note, 'Auto create: filling list name...')
-      const nameInput = await waitFor(() => findTextInput(['name', 'title', 'list', 'description']))
-      if (!nameInput) throw new Error('Could not find the Wants list name field.')
-      setNativeValue(nameInput, normalizeListName(payload.name))
-      await sleep(250)
-
-      const createButton = findSubmitButton(['create', 'save'])
-      if (createButton) {
-        setNote(note, 'Auto create: creating list...')
-        createButton.click()
-        await sleep(1500)
-      } else {
-        remember('No create/save button found after filling list name.')
-      }
-
-      setNote(note, 'Auto create: opening decklist import...')
-      const deckListButton = await waitFor(() =>
-        findClickable([
-          'add deck list',
-          'deck list',
-          'decklist',
-          'deck-list',
-          'add cards',
-          'add want',
-          'add wants',
-          'import',
-          'bulk',
-          'paste',
-        ]),
-      )
-      if (deckListButton) {
-        deckListButton.click()
-        await sleep(700)
-      } else {
-        remember('No decklist/import button found; trying to fill any visible textarea.')
+      alreadyOnDeckListForm = Boolean(findLargestTextarea())
+      if (!alreadyOnDeckListForm) {
+        setNote(note, 'Auto create: opening decklist import...')
+        deckListButton = await waitFor(findDeckListButton)
+        if (deckListButton) {
+          window.sessionStorage.setItem(activeStepKey, 'submit-deck-list')
+          deckListButton.click()
+          await sleep(700)
+        } else {
+          remember('No decklist/import button found; trying to fill any visible textarea.')
+        }
       }
 
       setNote(note, 'Auto create: filling missing-card decklist...')
@@ -295,8 +335,21 @@
       }
 
       setNote(note, 'Auto create: submitting decklist...')
+      window.sessionStorage.setItem(activeStepKey, 'back-to-list')
       addButton.click()
-      await sleep(1000)
+      await sleep(1200)
+
+      const backButton = await waitFor(findBackToWantsListButton, 6000)
+      if (backButton) {
+        setNote(note, 'Auto create: returning to Wants list...')
+        backButton.click()
+        await sleep(700)
+      } else {
+        remember('No Back to your wants list link found after submitting decklist.')
+      }
+
+      window.sessionStorage.removeItem(activeStepKey)
+      window.sessionStorage.removeItem(activePayloadKey)
       setNote(note, 'Auto create finished. Check the Wants list before using Shopping Wizard.')
     } catch (error) {
       setNote(note, error instanceof Error
@@ -427,14 +480,14 @@
     })
 
     const params = new URLSearchParams(window.location.search)
-    if (params.get(autoParam) === '1') {
+    if (params.get(autoParam) === '1' || window.sessionStorage.getItem(activeStepKey)) {
       window.setTimeout(() => {
         void runAutoCreate(safePayload, note)
       }, 800)
     }
   }
 
-  const payload = decodePayload()
+  const payload = getPayload()
   if (document.body) injectPanel(payload)
   else window.addEventListener('DOMContentLoaded', () => injectPanel(payload))
 })()
