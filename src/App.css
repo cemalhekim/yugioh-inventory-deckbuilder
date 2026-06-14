@@ -707,6 +707,37 @@ button:disabled {
   width: 30px;
 }
 
+.deck-list-item {
+  align-items: center;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "image name quantity"
+    "image meta actions";
+}
+
+.deck-list-item .line-thumb {
+  grid-area: image;
+}
+
+.deck-list-item > span {
+  grid-area: quantity;
+}
+
+.deck-list-item > strong {
+  grid-area: name;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.deck-list-item > small {
+  grid-area: meta;
+}
+
+.deck-list-item .deck-line-actions {
+  grid-area: actions;
+  justify-content: flex-end;
+}
+
 .missing-panel {
   grid-column: 3;
   grid-row: 1;

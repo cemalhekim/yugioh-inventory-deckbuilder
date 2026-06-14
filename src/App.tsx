@@ -1318,7 +1318,7 @@ function App() {
                     </div>
                   ) : (
                     deck[zone].map((entry) => (
-                      <div className="line-item" key={entry.card.id}>
+                      <div className="line-item deck-list-item" key={entry.card.id}>
                         <img
                           className="line-thumb"
                           src={entry.card.card_images?.[0]?.image_url_small}
