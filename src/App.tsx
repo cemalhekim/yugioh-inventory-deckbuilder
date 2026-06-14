@@ -4,6 +4,7 @@ import './App.css'
 
 type DeckZone = 'main' | 'extra' | 'side'
 type DeckViewMode = 'list' | 'cards'
+type AppPage = 'deck' | 'products'
 type SearchPanelView = 'search' | 'inventory'
 
 type YgoCard = {
@@ -371,6 +372,7 @@ function App() {
   )
   const [deck, setDeck] = useState<DeckState>(initialState.deck)
   const [deckName, setDeckName] = useState(initialState.deckName)
+  const [appPage, setAppPage] = useState<AppPage>('deck')
   const [deckViewMode, setDeckViewMode] = useState<DeckViewMode>('cards')
   const [searchPanelView, setSearchPanelView] = useState<SearchPanelView>('search')
   const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
@@ -948,13 +950,29 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <div className="view-toggle" aria-label="App page">
+            <button
+              className={appPage === 'deck' ? 'active' : ''}
+              type="button"
+              onClick={() => setAppPage('deck')}
+            >
+              Deck Command
+            </button>
+            <button
+              className={appPage === 'products' ? 'active' : ''}
+              type="button"
+              onClick={() => setAppPage('products')}
+            >
+              Sets & Products
+            </button>
+          </div>
           <button type="button" onClick={() => void launchYgopro()}>
             Launch YGOPRO
           </button>
         </div>
       </header>
 
-      <section className="stats-row" aria-label="Deck summary">
+      {appPage === 'deck' ? <section className="stats-row" aria-label="Deck summary">
         <div>
           <span>{inventory.reduce((sum, entry) => sum + entry.quantity, 0)}</span>
           Inventory cards
@@ -971,10 +989,10 @@ function App() {
           <span>{missingCount}</span>
           Missing
         </div>
-      </section>
+      </section> : null}
 
       <section className="workspace-grid">
-        <section className="panel search-panel">
+        <section className="panel search-panel" hidden={appPage !== 'deck'}>
           <div className="panel-heading">
             <div>
               <h2>{searchPanelView === 'search' ? 'Card Search' : 'Inventory'}</h2>
@@ -1065,6 +1083,12 @@ function App() {
                 {inventory.length ? (
                   inventory.map((entry) => (
                     <div className="line-item inventory-item" key={entry.card.id}>
+                      <img
+                        className="line-thumb"
+                        src={entry.card.card_images?.[0]?.image_url_small}
+                        alt=""
+                        onClick={() => setPreviewCard(entry.card)}
+                      />
                       <span>{entry.quantity}x</span>
                       <strong onClick={() => setPreviewCard(entry.card)}>
                         {entry.card.name}
@@ -1085,7 +1109,10 @@ function App() {
           )}
         </section>
 
-        <section className="panel sets-panel">
+        <section
+          className={`panel sets-panel ${appPage === 'products' ? 'full-page-panel' : ''}`}
+          hidden={appPage !== 'products'}
+        >
           <div className="panel-heading">
             <div>
               <h2>Sets & Products</h2>
@@ -1122,6 +1149,7 @@ function App() {
                   type="button"
                   onClick={() => void loadSetCards(set)}
                 >
+                  <img src={set.set_image || '/kaibacorp-logo.png'} alt="" />
                   <strong>{set.set_name}</strong>
                   <span>
                     {set.set_code} · {getSetKind(set.set_name)} · {set.num_of_cards}
@@ -1157,6 +1185,12 @@ function App() {
               {isSetLoading ? <p className="muted">Loading cards...</p> : null}
               {selectedSetCards.map((card) => (
                 <div className="line-item set-card-item" key={card.id}>
+                  <img
+                    className="line-thumb"
+                    src={card.card_images?.[0]?.image_url_small}
+                    alt=""
+                    onClick={() => setPreviewCard(card)}
+                  />
                   <span>{inventoryById.get(card.id) ?? 0}x</span>
                   <strong onClick={() => setPreviewCard(card)}>{card.name}</strong>
                   <small>{card.type}</small>
@@ -1169,7 +1203,7 @@ function App() {
           </div>
         </section>
 
-        <section className="panel deck-panel">
+        <section className="panel deck-panel" hidden={appPage !== 'deck'}>
           <div className="panel-heading deck-heading">
             <div>
               <h2>Deck</h2>
@@ -1267,6 +1301,12 @@ function App() {
                   ) : (
                     deck[zone].map((entry) => (
                       <div className="line-item" key={entry.card.id}>
+                        <img
+                          className="line-thumb"
+                          src={entry.card.card_images?.[0]?.image_url_small}
+                          alt=""
+                          onClick={() => setPreviewCard(entry.card)}
+                        />
                         <span>{entry.quantity}x</span>
                         <strong onClick={() => setPreviewCard(entry.card)}>
                           {entry.card.name}
@@ -1301,7 +1341,7 @@ function App() {
           </div>
         </section>
 
-        <section className="panel kaiba-panel">
+        <section className="panel kaiba-panel" hidden={appPage !== 'deck'}>
           <div className="panel-heading">
             <div>
               <h2>KaibaPro Sync</h2>
@@ -1356,6 +1396,7 @@ function App() {
                     type="button"
                     onClick={() => void openKaibaDeck(deckFile.fileName)}
                   >
+                    <img src="/kaibacorp-logo.png" alt="" />
                     <strong>{deckFile.name}</strong>
                     <span>{new Date(deckFile.updatedAt).toLocaleString()}</span>
                   </button>
@@ -1374,7 +1415,7 @@ function App() {
           </div>
         </section>
 
-        <section className="panel missing-panel">
+        <section className="panel missing-panel" hidden={appPage !== 'deck'}>
           <div className="panel-heading">
             <div>
               <h2>Missing Cards</h2>
