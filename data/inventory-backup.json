@@ -6585,6 +6585,117 @@
       },
       {
         "card": {
+          "id": 63198739,
+          "name": "Primite Dragon Ether Beryl",
+          "typeline": [
+            "Dragon",
+            "Effect"
+          ],
+          "type": "Effect Monster",
+          "humanReadableCardType": "Effect Monster",
+          "frameType": "effect",
+          "desc": "If this card is Normal Summoned: You can Set 1 \"Primite\" Spell/Trap from your Deck. You can only use each of the following effects of \"Primite Dragon Ether Beryl\" once per turn. You can Tribute this card; send 1 Normal Monster from your Deck to the GY. During your Standby Phase, if you have a Normal Monster in your field or GY: You can add this card from the GY to your hand.",
+          "race": "Dragon",
+          "atk": 1600,
+          "def": 0,
+          "level": 4,
+          "attribute": "EARTH",
+          "archetype": "Primite",
+          "ygoprodeck_url": "https://ygoprodeck.com/card/primite-dragon-ether-beryl-14781",
+          "card_sets": [
+            {
+              "set_name": "Battles of Legend: Monster Mayhem",
+              "set_code": "BLMM-EN130",
+              "set_rarity": "Secret Rare",
+              "set_rarity_code": "(ScR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Rarity Collection 5",
+              "set_code": "RA05-EN033",
+              "set_rarity": "Collector's Rare",
+              "set_rarity_code": "(CR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Rarity Collection 5",
+              "set_code": "RA05-EN033",
+              "set_rarity": "PLatinum Secret Rare",
+              "set_rarity_code": "",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Rarity Collection 5",
+              "set_code": "RA05-EN033",
+              "set_rarity": "Secret Rare",
+              "set_rarity_code": "(ScR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Rarity Collection 5",
+              "set_code": "RA05-EN033",
+              "set_rarity": "Starlight Rare",
+              "set_rarity_code": "(StR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Rarity Collection 5",
+              "set_code": "RA05-EN033",
+              "set_rarity": "Super Rare",
+              "set_rarity_code": "(SR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Rarity Collection 5",
+              "set_code": "RA05-EN033",
+              "set_rarity": "Ultimate Rare",
+              "set_rarity_code": "(UtR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Rarity Collection 5",
+              "set_code": "RA05-EN033",
+              "set_rarity": "Ultra Rare",
+              "set_rarity_code": "(UR)",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Supreme Darkness",
+              "set_code": "SUDA-EN015",
+              "set_rarity": "Quarter Century Secret Rare",
+              "set_rarity_code": "",
+              "set_price": "0"
+            },
+            {
+              "set_name": "Supreme Darkness",
+              "set_code": "SUDA-EN015",
+              "set_rarity": "Ultra Rare",
+              "set_rarity_code": "(UR)",
+              "set_price": "0"
+            }
+          ],
+          "card_images": [
+            {
+              "id": 63198739,
+              "image_url": "https://images.ygoprodeck.com/images/cards/63198739.jpg",
+              "image_url_small": "https://images.ygoprodeck.com/images/cards_small/63198739.jpg",
+              "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/63198739.jpg"
+            }
+          ],
+          "card_prices": [
+            {
+              "cardmarket_price": "3.46",
+              "tcgplayer_price": "1.26",
+              "ebay_price": "0.00",
+              "amazon_price": "0.00",
+              "coolstuffinc_price": "0.00"
+            }
+          ]
+        },
+        "quantity": 3
+      },
+      {
+        "card": {
           "id": 27204311,
           "name": "Nibiru, the Primal Being",
           "typeline": [
