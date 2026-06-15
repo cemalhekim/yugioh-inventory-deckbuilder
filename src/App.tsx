@@ -452,6 +452,7 @@ function App() {
   const [isKaibaFolderPicking, setIsKaibaFolderPicking] = useState(false)
   const [deckHistory, setDeckHistory] = useState<DeckVersion[]>([])
   const [activeDeckContentHash, setActiveDeckContentHash] = useState('')
+  const [activeDeckBranchName, setActiveDeckBranchName] = useState('')
   const [deckContextMenu, setDeckContextMenu] = useState<{
     fileName: string
     x: number
@@ -1090,6 +1091,7 @@ function App() {
       setDeck(sortDeckState(nextDeck))
       setDeckName(payload.name)
       setSelectedKaibaDeck(payload.fileName)
+      setActiveDeckBranchName('')
       setDeckContextMenu(null)
       setKaibaStatus(`Loaded ${payload.fileName}.`)
       await loadDeckHistory(payload.fileName)
@@ -1186,7 +1188,11 @@ function App() {
     }
   }
 
-  async function restoreDeckVersion(versionId: string, confirmFirst = true) {
+  async function restoreDeckVersion(
+    versionId: string,
+    confirmFirst = true,
+    nextBranchName = '',
+  ) {
     if (!selectedKaibaDeck) return
 
     if (confirmFirst) {
@@ -1203,6 +1209,7 @@ function App() {
       if (!response.ok) throw new Error(`Could not restore ${selectedKaibaDeck}.`)
       const payload = (await response.json()) as { fileName: string }
       await openKaibaDeck(payload.fileName)
+      setActiveDeckBranchName(nextBranchName)
       await refreshKaibaDecks()
       await loadDeckHistory(payload.fileName)
       setVersionContextMenu(null)
@@ -1254,6 +1261,7 @@ function App() {
       if (selectedKaibaDeck === fileName) {
         setSelectedKaibaDeck('')
         setDeckHistory([])
+        setActiveDeckBranchName('')
       }
 
       setDeckContextMenu(null)
@@ -1275,18 +1283,29 @@ function App() {
       const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(target)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: createYdk(deck, deckName), note }),
+        body: JSON.stringify({
+          branchName: activeDeckBranchName,
+          content: createYdk(deck, deckName),
+          note,
+          parentId: activeDeckVersionId,
+        }),
       })
       if (!response.ok) throw new Error('Could not save KaibaPro deck.')
       const payload = (await response.json()) as { fileName: string }
       setSelectedKaibaDeck(payload.fileName)
-      if (!quiet) setKaibaStatus(`Saved ${payload.fileName}.`)
+      if (!quiet) {
+        setKaibaStatus(
+          activeDeckBranchName
+            ? `Saved ${payload.fileName} on branch ${activeDeckBranchName}.`
+            : `Saved ${payload.fileName}.`,
+        )
+      }
       await refreshKaibaDecks()
       await loadDeckHistory(payload.fileName)
     } catch (error) {
       setKaibaStatus(error instanceof Error ? error.message : 'Save deck failed.')
     }
-  }, [deck, deckName, refreshKaibaDecks])
+  }, [activeDeckBranchName, activeDeckVersionId, deck, deckName, refreshKaibaDecks])
 
   function saveCurrentWorkingDeck() {
     const target = selectedKaibaDeck || deckName
@@ -1873,11 +1892,13 @@ function App() {
                           .join(' ')}
                         key={version.id}
                         onContextMenu={(event) => openVersionContextMenu(event, version)}
-                        onDoubleClick={() => void restoreDeckVersion(version.id, false)}
+                        onDoubleClick={() =>
+                          void restoreDeckVersion(version.id, false, version.branchName ?? '')
+                        }
                         onKeyDown={(event) => {
                           if (event.key !== 'Enter') return
                           event.preventDefault()
-                          void restoreDeckVersion(version.id, false)
+                          void restoreDeckVersion(version.id, false, version.branchName ?? '')
                         }}
                         role="button"
                         tabIndex={0}

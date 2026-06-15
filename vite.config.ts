@@ -290,6 +290,7 @@ async function writeDeckBranch(
   content: string,
   branchName: string,
   parentId = '',
+  note = '',
 ) {
   const cleanBranchName = branchName.trim()
   if (!cleanBranchName) throw new Error('Branch name is required.')
@@ -306,7 +307,11 @@ async function writeDeckBranch(
   await fs.writeFile(versionPath, content, 'utf8')
 
   const meta = await readDeckBranchMeta(fileName)
-  meta[versionId] = { branchName: cleanBranchName, parentId }
+  meta[versionId] = {
+    branchName: cleanBranchName,
+    parentId,
+    ...(note.trim() ? { note: note.trim() } : {}),
+  }
   await writeDeckBranchMeta(fileName, meta)
   return versionId
 }
@@ -742,8 +747,10 @@ function kaibaProDecksPlugin(): Plugin {
 
           if (req.method === 'PUT') {
             const body = JSON.parse(await readRequestBody(req)) as {
+              branchName?: string
               content?: string
               note?: string
+              parentId?: string
             }
             if (typeof body.content !== 'string') {
               sendJson(res, 400, { error: 'content must be a string' })
@@ -753,12 +760,22 @@ function kaibaProDecksPlugin(): Plugin {
               fs.writeFile(deckPath, body.content, 'utf8'),
               fs.writeFile(repoDeckPath, body.content, 'utf8'),
             ])
-            await writeDeckVersion(
-              fileName,
-              body.content,
-              'save',
-              typeof body.note === 'string' ? body.note : '',
-            )
+            if (typeof body.branchName === 'string' && body.branchName.trim()) {
+              await writeDeckBranch(
+                fileName,
+                body.content,
+                body.branchName,
+                typeof body.parentId === 'string' ? body.parentId : '',
+                typeof body.note === 'string' ? body.note : '',
+              )
+            } else {
+              await writeDeckVersion(
+                fileName,
+                body.content,
+                'save',
+                typeof body.note === 'string' ? body.note : '',
+              )
+            }
             sendJson(res, 200, { deckDir, repoDeckDir, fileName })
             return
           }
