@@ -102,9 +102,11 @@ const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 const cardmarketPayloadHashKey = 'ygo-inventory-wants'
 const cardDragDataType = 'application/ygo-card'
-const historyRowHeight = 56
+const historyRowHeight = 72
 const historyLaneWidth = 34
 const historyLaneStart = 18
+const historyGraphInset = 26
+const historyGraphYOffset = historyRowHeight / 2
 const historyLaneColors = ['#39c8ff', '#f7d45c', '#e218a9', '#18df35', '#f0a21b', '#9f22ff']
 const historyGraphTemplate = templateExtend(TemplateName.Metro, {
   colors: historyLaneColors,
@@ -650,12 +652,22 @@ function App() {
     }
 
     const rendered = graph.getRenderedData()
+    const versionByHash = new Map(
+      deckHistory.map((version) => [
+        version.hash || version.id.replace(/\.ydk$/i, ''),
+        version,
+      ]),
+    )
     const commits = rendered.commits.map((commit) => ({
       color: commit.style.color ?? historyLaneColors[0],
       hash: commit.hash,
       x: commit.x,
       y: commit.y,
     }))
+    const rows = [...commits]
+      .sort((a, b) => a.y - b.y)
+      .map((commit) => versionByHash.get(commit.hash))
+      .filter((version): version is DeckVersion => Boolean(version))
     const paths = Array.from(rendered.branchesPaths).map(([branch, coordinates]) => ({
       color: branch.style.color ?? historyLaneColors[0],
       d: toSvgPath(coordinates, true, true),
@@ -668,9 +680,10 @@ function App() {
       graphHeight: maxY + historyRowHeight,
       graphWidth: Math.max(
         historyLaneStart + Math.max(branchNames.length, 1) * historyLaneWidth + 42,
-        maxX + 42,
+        maxX + historyGraphInset * 2 + 24,
       ),
       paths,
+      rows,
     }
   }, [deckHistory])
 
@@ -1775,21 +1788,23 @@ function App() {
                     viewBox={`0 0 ${deckHistoryGraph.graphWidth} ${deckHistoryGraph.graphHeight}`}
                     width={deckHistoryGraph.graphWidth}
                   >
-                    {deckHistoryGraph.paths.map((path) => (
-                      <path d={path.d} key={`${path.color}-${path.d}`} stroke={path.color} />
-                    ))}
-                    {deckHistoryGraph.commits.map((commit) => (
-                      <circle
-                        cx={commit.x}
-                        cy={commit.y}
-                        fill="var(--kc-bg)"
-                        key={commit.hash}
-                        r="7"
-                        stroke={commit.color}
-                      />
-                    ))}
+                    <g transform={`translate(${historyGraphInset}, ${historyGraphYOffset})`}>
+                      {deckHistoryGraph.paths.map((path) => (
+                        <path d={path.d} key={`${path.color}-${path.d}`} stroke={path.color} />
+                      ))}
+                      {deckHistoryGraph.commits.map((commit) => (
+                        <circle
+                          cx={commit.x}
+                          cy={commit.y}
+                          fill="var(--kc-bg)"
+                          key={commit.hash}
+                          r="7"
+                          stroke={commit.color}
+                        />
+                      ))}
+                    </g>
                   </svg>
-                  {deckHistory.map((version) => (
+                  {deckHistoryGraph.rows.map((version) => (
                     <div
                       className={
                         version.branchName
