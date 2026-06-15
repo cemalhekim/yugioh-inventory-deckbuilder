@@ -163,7 +163,7 @@ button:disabled {
   padding: 14px 32px 0;
 }
 
-.stats-row div {
+.stats-row > div {
   background: linear-gradient(160deg, rgba(11, 28, 52, 0.96), rgba(8, 18, 34, 0.96));
   border: 1px solid var(--kc-line);
   color: var(--kc-muted);
@@ -171,6 +171,11 @@ button:disabled {
   font-weight: 900;
   padding: 15px 16px;
   text-transform: uppercase;
+}
+
+.missing-stat {
+  position: relative;
+  z-index: 4;
 }
 
 .stats-row span {
@@ -239,8 +244,7 @@ button:disabled {
 
 .search-input,
 .deck-name,
-.set-tools select,
-.save-as-row input {
+.set-tools select {
   background: rgba(3, 10, 20, 0.82);
   border: 1px solid var(--kc-line);
   border-radius: 4px;
@@ -255,8 +259,7 @@ button:disabled {
 
 .search-input:focus,
 .deck-name:focus,
-.set-tools select:focus,
-.save-as-row input:focus {
+.set-tools select:focus {
   border-color: var(--kc-line-strong);
   box-shadow: 0 0 0 2px rgba(57, 200, 255, 0.14);
 }
@@ -275,8 +278,7 @@ button:disabled {
 
 .inventory-tools,
 .search-tools,
-.set-tools,
-.sync-controls {
+.set-tools {
   border-bottom: 1px solid var(--kc-line);
   padding: 10px 12px;
 }
@@ -328,6 +330,7 @@ button:disabled {
 .kaiba-panel {
   grid-column: 1 / -1;
   grid-row: 3;
+  position: relative;
 }
 
 .set-search {
@@ -370,8 +373,7 @@ button:disabled {
 .kaiba-deck-row {
   align-items: stretch;
   border-bottom: 1px solid rgba(90, 190, 255, 0.22);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: block;
 }
 
 .kaiba-deck-open {
@@ -411,6 +413,18 @@ button:disabled {
 .set-list button.selected,
 .kaiba-deck-row.selected .kaiba-deck-open {
   background: linear-gradient(90deg, rgba(28, 100, 180, 0.5), rgba(9, 23, 43, 0.82));
+}
+
+.deck-context-menu {
+  background: rgba(7, 16, 31, 0.98);
+  border: 1px solid rgba(255, 96, 132, 0.7);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+  display: grid;
+  gap: 6px;
+  min-width: 120px;
+  padding: 6px;
+  position: fixed;
+  z-index: 20;
 }
 
 .set-list strong,
@@ -454,42 +468,11 @@ button:disabled {
   overflow: auto;
 }
 
-.sync-controls {
-  align-items: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(280px, 1fr) auto auto minmax(220px, 0.8fr);
-}
-
 .kaiba-folder-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
-}
-
-.sync-controls label {
-  align-items: center;
-  color: var(--kc-text);
-  display: flex;
-  font-size: 14px;
-  font-weight: 800;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.save-as-row {
-  display: flex;
-  gap: 8px;
-}
-
-.sync-status {
-  color: var(--kc-muted);
-  font-size: 12px;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .deck-history {
@@ -612,7 +595,7 @@ button:disabled {
 }
 
 .deck-panel {
-  grid-column: 2;
+  grid-column: 2 / 4;
   grid-row: 1;
 }
 
@@ -789,11 +772,6 @@ button:disabled {
   justify-content: flex-end;
 }
 
-.missing-panel {
-  grid-column: 3;
-  grid-row: 1;
-}
-
 .cardmarket-prep {
   align-items: end;
   border-bottom: 1px solid var(--kc-line);
@@ -801,6 +779,24 @@ button:disabled {
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 10px 12px;
+}
+
+.missing-dropdown {
+  background: rgba(7, 16, 31, 0.98);
+  border: 1px solid var(--kc-line-strong);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.42), var(--kc-shadow);
+  display: none;
+  min-width: min(520px, calc(100vw - 64px));
+  position: absolute;
+  right: 0;
+  text-transform: none;
+  top: calc(100% + 8px);
+  z-index: 30;
+}
+
+.missing-stat:hover .missing-dropdown,
+.missing-stat:focus-within .missing-dropdown {
+  display: block;
 }
 
 .cardmarket-prep label {
@@ -823,13 +819,13 @@ button:disabled {
   padding: 0 10px;
 }
 
-.missing-panel textarea {
+.missing-dropdown textarea {
   background: rgba(3, 10, 20, 0.78);
   border: 0;
   box-sizing: border-box;
   color: var(--kc-text);
   font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  min-height: 260px;
+  min-height: 220px;
   outline: none;
   padding: 14px 16px;
   resize: vertical;
@@ -987,8 +983,7 @@ button:disabled {
 
   .search-panel,
   .deck-panel,
-  .kaiba-panel,
-  .missing-panel {
+  .kaiba-panel {
     grid-column: auto;
     grid-row: auto;
   }
@@ -1041,7 +1036,6 @@ button:disabled {
 
   .set-tools,
   .set-browser,
-  .sync-controls,
   .cardmarket-prep {
     grid-template-columns: 1fr;
   }
@@ -1058,10 +1052,6 @@ button:disabled {
     border-right: 0;
     border-bottom: 1px solid var(--kc-line);
     max-height: 260px;
-  }
-
-  .sync-status {
-    white-space: normal;
   }
 
   .deck-zone {

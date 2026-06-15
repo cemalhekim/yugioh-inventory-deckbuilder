@@ -12,8 +12,10 @@ const repoDeckDir = path.resolve(process.cwd(), 'decks')
 const deckHistoryDir = path.join(repoDeckDir, '.history')
 const repoStatePath = path.resolve(process.cwd(), 'data', 'inventory-backup.json')
 const cardmarketHelperPath = path.resolve(process.cwd(), 'tools', 'cardmarket-wants-helper.user.js')
-const ygoproDir = 'C:\\Yu-Gi-Oh! The Dawn of a New Era'
-const ygoproLauncher = 'YGOPRO Dawn of a New Era Launcher Pro.exe'
+const defaultSimulatorDir = process.platform === 'win32'
+  ? 'C:\\Yu-Gi-Oh! The Dawn of a New Era'
+  : process.cwd()
+const windowsSimulatorLauncher = 'YGOPRO Dawn of a New Era Launcher Pro.exe'
 const execFileAsync = promisify(execFile)
 
 function sendJson(res: import('node:http').ServerResponse, status: number, data: unknown) {
@@ -74,7 +76,7 @@ async function runFirstAvailableFolderPicker(
   throw new Error(`No folder picker is available. Install one of: ${errors.join(', ')}.`)
 }
 
-async function pickDeckFolder(currentDeckDir: string) {
+async function pickFolder(currentDir: string, title: string) {
   if (process.platform === 'linux') {
     return runFirstAvailableFolderPicker([
       {
@@ -82,21 +84,21 @@ async function pickDeckFolder(currentDeckDir: string) {
         args: [
           '--file-selection',
           '--directory',
-          '--title=Select your KaibaPro 2 deck folder',
-          `--filename=${currentDeckDir}${path.sep}`,
+          `--title=${title}`,
+          `--filename=${currentDir}${path.sep}`,
         ],
       },
       {
         command: 'kdialog',
-        args: ['--getexistingdirectory', currentDeckDir, 'Select your KaibaPro 2 deck folder'],
+        args: ['--getexistingdirectory', currentDir, title],
       },
       {
         command: 'yad',
         args: [
           '--file-selection',
           '--directory',
-          '--title=Select your KaibaPro 2 deck folder',
-          `--filename=${currentDeckDir}${path.sep}`,
+          `--title=${title}`,
+          `--filename=${currentDir}${path.sep}`,
         ],
       },
     ])
@@ -104,8 +106,8 @@ async function pickDeckFolder(currentDeckDir: string) {
 
   if (process.platform === 'darwin') {
     const script = `
-set initialPath to POSIX file "${currentDeckDir.replace(/"/g, '\\"')}"
-set selectedFolder to choose folder with prompt "Select your KaibaPro 2 deck folder" default location initialPath
+set initialPath to POSIX file "${currentDir.replace(/"/g, '\\"')}"
+set selectedFolder to choose folder with prompt "${title.replace(/"/g, '\\"')}" default location initialPath
 POSIX path of selectedFolder
 `
     const { stdout } = await execFileAsync('osascript', ['-e', script])
@@ -119,7 +121,7 @@ POSIX path of selectedFolder
   const script = `
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = 'Select your KaibaPro 2 deck folder'
+$dialog.Description = [Environment]::GetEnvironmentVariable('CODEX_FOLDER_PICKER_TITLE')
 $dialog.ShowNewFolderButton = $true
 $initialPath = [Environment]::GetEnvironmentVariable('KAIBAPRO_CURRENT_DECK_DIR')
 if ($initialPath -and (Test-Path -LiteralPath $initialPath)) {
@@ -135,9 +137,17 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     '-Command',
     script,
   ], {
-    env: { ...process.env, KAIBAPRO_CURRENT_DECK_DIR: currentDeckDir },
+    env: {
+      ...process.env,
+      CODEX_FOLDER_PICKER_TITLE: title,
+      KAIBAPRO_CURRENT_DECK_DIR: currentDir,
+    },
   })
   return stdout.trim()
+}
+
+async function pickDeckFolder(currentDeckDir: string) {
+  return pickFolder(currentDeckDir, 'Select your KaibaPro 2 deck folder')
 }
 
 async function listYdkFileNames(deckDir: string) {
@@ -304,6 +314,99 @@ async function removeDeckIfExists(deckPath: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
+}
+
+async function listFilesRecursive(rootDir: string, depth = 2): Promise<string[]> {
+  if (depth < 0 || !(await pathExists(rootDir))) return []
+
+  const entries = await fs.readdir(rootDir, { withFileTypes: true })
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(rootDir, entry.name)
+      if (entry.isDirectory()) return listFilesRecursive(entryPath, depth - 1)
+      if (entry.isFile()) return [entryPath]
+      return []
+    }),
+  )
+  return files.flat()
+}
+
+async function findSimulatorLauncher(appDir: string) {
+  const resolvedAppDir = path.resolve(appDir)
+  await fs.access(resolvedAppDir)
+
+  const files = await listFilesRecursive(resolvedAppDir)
+  const lowerPriorityName = (filePath: string) => {
+    const baseName = path.basename(filePath).toLowerCase()
+    if (baseName.includes('launcher')) return 0
+    if (baseName.includes('ygopro') || baseName.includes('kaiba')) return 1
+    return 2
+  }
+
+  if (process.platform === 'win32') {
+    const knownPath = path.join(resolvedAppDir, windowsSimulatorLauncher)
+    if (await pathExists(knownPath)) return knownPath
+
+    const candidates = files
+      .filter((filePath) => filePath.toLowerCase().endsWith('.exe'))
+      .sort((a, b) => lowerPriorityName(a) - lowerPriorityName(b))
+    if (candidates[0]) return candidates[0]
+    throw new Error('No Windows .exe launcher was found in the selected simulator folder.')
+  }
+
+  if (process.platform === 'linux') {
+    const candidates = await Promise.all(
+      files.map(async (filePath) => {
+        const stat = await fs.stat(filePath)
+        const lowerName = filePath.toLowerCase()
+        const executable = Boolean(stat.mode & 0o111)
+        const runnable =
+          lowerName.endsWith('.appimage') ||
+          lowerName.endsWith('.sh') ||
+          executable
+        return runnable ? filePath : ''
+      }),
+    )
+    const launcherPath = candidates
+      .filter(Boolean)
+      .sort((a, b) => lowerPriorityName(a) - lowerPriorityName(b))[0]
+    if (launcherPath) return launcherPath
+    throw new Error('No Linux runnable file was found in the selected simulator folder.')
+  }
+
+  if (process.platform === 'darwin') {
+    const appBundle = files.find((filePath) => filePath.includes('.app/'))
+    if (appBundle) return appBundle.slice(0, appBundle.indexOf('.app/') + 4)
+    throw new Error('No macOS .app bundle was found in the selected simulator folder.')
+  }
+
+  throw new Error(`Simulator launch is not supported on ${process.platform}.`)
+}
+
+function spawnSimulator(launcherPath: string) {
+  const cwd = launcherPath.endsWith('.app') ? path.dirname(launcherPath) : path.dirname(launcherPath)
+
+  if (process.platform === 'darwin' && launcherPath.endsWith('.app')) {
+    const child = spawn('open', [launcherPath], {
+      cwd,
+      detached: true,
+      stdio: 'ignore',
+    })
+    child.unref()
+    return
+  }
+
+  const command = process.platform === 'linux' && launcherPath.toLowerCase().endsWith('.sh')
+    ? 'bash'
+    : launcherPath
+  const args = command === 'bash' ? [launcherPath] : []
+  const child = spawn(command, args, {
+    cwd,
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: false,
+  })
+  child.unref()
 }
 
 function kaibaProDecksPlugin(): Plugin {
@@ -497,36 +600,56 @@ function appStatePlugin(): Plugin {
 }
 
 function ygoproLauncherPlugin(): Plugin {
+  let simulatorDir = process.env.YGOPRO_DIR ?? process.env.SIMULATOR_APP_DIR ?? defaultSimulatorDir
+
   return {
     name: 'ygopro-launcher-api',
     configureServer(server) {
-      server.middlewares.use('/api/ygopro/launch', async (req, res) => {
+      server.middlewares.use('/api/ygopro', async (req, res) => {
         try {
-          if (req.method !== 'POST') {
-            sendJson(res, 405, { error: 'Method not allowed' })
+          if (req.method === 'PUT' && req.url === '/folder') {
+            const body = JSON.parse(await readRequestBody(req)) as { appDir?: string }
+            if (typeof body.appDir !== 'string' || !body.appDir.trim()) {
+              sendJson(res, 400, { error: 'appDir must be a folder path' })
+              return
+            }
+            simulatorDir = path.resolve(body.appDir.trim())
+            const launcherPath = await findSimulatorLauncher(simulatorDir)
+            sendJson(res, 200, { appDir: simulatorDir, launcherPath })
             return
           }
 
-          if (process.platform !== 'win32') {
-            sendJson(res, 400, { error: 'YGOPRO launch is only available on Windows.' })
+          if (req.method === 'POST' && req.url === '/select-folder') {
+            const selectedDir = await pickFolder(
+              simulatorDir,
+              'Select the simulator application folder',
+            )
+            if (!selectedDir) {
+              sendJson(res, 200, { appDir: simulatorDir, canceled: true })
+              return
+            }
+
+            simulatorDir = path.resolve(selectedDir)
+            const launcherPath = await findSimulatorLauncher(simulatorDir)
+            sendJson(res, 200, { appDir: simulatorDir, launcherPath })
             return
           }
 
-          const launcherPath = path.join(ygoproDir, ygoproLauncher)
-          await fs.access(launcherPath)
+          if (req.method === 'POST' && req.url === '/launch') {
+            const bodyText = await readRequestBody(req)
+            const body = bodyText ? JSON.parse(bodyText) as { appDir?: string } : {}
+            if (body.appDir?.trim()) simulatorDir = path.resolve(body.appDir.trim())
 
-          const child = spawn(launcherPath, [], {
-            cwd: ygoproDir,
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: false,
-          })
-          child.unref()
+            const launcherPath = await findSimulatorLauncher(simulatorDir)
+            spawnSimulator(launcherPath)
+            sendJson(res, 200, { appDir: simulatorDir, launched: true, launcherPath })
+            return
+          }
 
-          sendJson(res, 200, { launched: true, launcherPath })
+          sendJson(res, 404, { error: 'Not found' })
         } catch (error) {
           sendJson(res, 500, {
-            error: error instanceof Error ? error.message : 'YGOPRO launch failed.',
+            error: error instanceof Error ? error.message : 'Simulator launch failed.',
           })
         }
       })

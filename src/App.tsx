@@ -67,6 +67,7 @@ type PersistedState = {
 
 const STORAGE_KEY = 'ygo-inventory-deckbuilder-v1'
 const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
+const SIMULATOR_APP_DIR_KEY = 'simulator-app-dir-v1'
 const maxDeckCopies = 3
 const deckZoneLimits: Record<DeckZone, number> = {
   main: 60,
@@ -401,13 +402,19 @@ function App() {
   const [kaibaDeckDir, setKaibaDeckDir] = useState(
     () => localStorage.getItem(KAIBAPRO_DECK_DIR_KEY) ?? '',
   )
+  const [simulatorAppDir, setSimulatorAppDir] = useState(
+    () => localStorage.getItem(SIMULATOR_APP_DIR_KEY) ?? '',
+  )
   const [repoDeckDir, setRepoDeckDir] = useState('')
   const [selectedKaibaDeck, setSelectedKaibaDeck] = useState('')
-  const [kaibaSaveName, setKaibaSaveName] = useState('')
   const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
   const [isKaibaFolderPicking, setIsKaibaFolderPicking] = useState(false)
   const [deckHistory, setDeckHistory] = useState<DeckVersion[]>([])
-  const [isDeckHistoryLoading, setIsDeckHistoryLoading] = useState(false)
+  const [deckContextMenu, setDeckContextMenu] = useState<{
+    fileName: string
+    x: number
+    y: number
+  } | null>(null)
   const [isRepoStateReady, setIsRepoStateReady] = useState(false)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -683,14 +690,78 @@ function App() {
     setStatus('Cardmarket opened.')
   }
 
-  async function launchYgopro() {
-    setStatus('Launching YGOPRO...')
+  async function selectSimulatorAppFolder() {
+    const response = await fetch('/api/ygopro/select-folder', { method: 'POST' })
+    if (!response.ok) throw new Error('Could not select simulator application folder.')
+    const payload = (await response.json()) as {
+      appDir: string
+      launcherPath?: string
+      canceled?: boolean
+    }
+    if (payload.canceled) return ''
+
+    setSimulatorAppDir(payload.appDir)
+    localStorage.setItem(SIMULATOR_APP_DIR_KEY, payload.appDir)
+    setStatus(`Simulator launcher found: ${payload.launcherPath ?? payload.appDir}`)
+    return payload.appDir
+  }
+
+  async function launchSimulator() {
+    let appDir = simulatorAppDir
+
+    if (!appDir) {
+      const confirmed = window.confirm(
+        'No valid simulator application path is configured yet. After you press OK, select the root folder where the simulator application is installed. The launcher will inspect that folder, use a .exe launcher on Windows, or run the first suitable Linux executable/AppImage/shell launcher it finds, then store this folder for future launches.',
+      )
+      if (!confirmed) return
+      appDir = await selectSimulatorAppFolder()
+      if (!appDir) {
+        setStatus('Simulator folder selection canceled.')
+        return
+      }
+    }
+
+    setStatus('Launching simulator...')
     try {
-      const response = await fetch('/api/ygopro/launch', { method: 'POST' })
-      if (!response.ok) throw new Error('Could not launch YGOPRO.')
-      setStatus('YGOPRO launcher started.')
+      const response = await fetch('/api/ygopro/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appDir }),
+      })
+      if (!response.ok) throw new Error('Could not launch simulator.')
+      const payload = (await response.json()) as { appDir: string; launcherPath: string }
+      setSimulatorAppDir(payload.appDir)
+      localStorage.setItem(SIMULATOR_APP_DIR_KEY, payload.appDir)
+      setStatus(`Simulator started: ${payload.launcherPath}`)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'YGOPRO launch failed.')
+      const shouldSelectAgain = window.confirm(
+        'The configured simulator path could not be launched. Press OK to select the simulator application folder again.',
+      )
+      if (!shouldSelectAgain) {
+        setStatus(error instanceof Error ? error.message : 'Simulator launch failed.')
+        return
+      }
+
+      try {
+        const nextDir = await selectSimulatorAppFolder()
+        if (!nextDir) {
+          setStatus('Simulator folder selection canceled.')
+          return
+        }
+        const response = await fetch('/api/ygopro/launch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appDir: nextDir }),
+        })
+        if (!response.ok) {
+          setStatus('Could not launch simulator.')
+          return
+        }
+        const payload = (await response.json()) as { appDir: string; launcherPath: string }
+        setStatus(`Simulator started: ${payload.launcherPath}`)
+      } catch (launchError) {
+        setStatus(launchError instanceof Error ? launchError.message : 'Simulator launch failed.')
+      }
     }
   }
 
@@ -799,7 +870,6 @@ function App() {
       }
 
       setSelectedKaibaDeck('')
-      setKaibaSaveName('')
       setDeckHistory([])
       setKaibaDeckDir(payload.deckDir)
       if (payload.repoDeckDir) setRepoDeckDir(payload.repoDeckDir)
@@ -845,7 +915,7 @@ function App() {
       setDeck(sortDeckState(nextDeck))
       setDeckName(payload.name)
       setSelectedKaibaDeck(payload.fileName)
-      setKaibaSaveName(payload.name)
+      setDeckContextMenu(null)
       setKaibaStatus(`Loaded ${payload.fileName}.`)
       await loadDeckHistory(payload.fileName)
     } catch (error) {
@@ -859,7 +929,6 @@ function App() {
       return
     }
 
-    setIsDeckHistoryLoading(true)
     try {
       const response = await fetch(
         `/api/kaibapro/decks/${encodeURIComponent(fileName)}/history`,
@@ -873,8 +942,6 @@ function App() {
       setKaibaStatus(`Loaded ${payload.versions.length} versions for ${payload.fileName}.`)
     } catch (error) {
       setKaibaStatus(error instanceof Error ? error.message : 'Load history failed.')
-    } finally {
-      setIsDeckHistoryLoading(false)
     }
   }
 
@@ -914,10 +981,10 @@ function App() {
 
       if (selectedKaibaDeck === fileName) {
         setSelectedKaibaDeck('')
-        setKaibaSaveName('')
         setDeckHistory([])
       }
 
+      setDeckContextMenu(null)
       setKaibaStatus(`Deleted ${fileName}.`)
       await refreshKaibaDecks()
     } catch (error) {
@@ -941,7 +1008,6 @@ function App() {
       if (!response.ok) throw new Error('Could not save KaibaPro deck.')
       const payload = (await response.json()) as { fileName: string }
       setSelectedKaibaDeck(payload.fileName)
-      setKaibaSaveName(payload.fileName.replace(/\.ydk$/i, ''))
       if (!quiet) setKaibaStatus(`Saved ${payload.fileName}.`)
       await refreshKaibaDecks()
     } catch (error) {
@@ -950,8 +1016,13 @@ function App() {
   }, [deck, deckName, refreshKaibaDecks])
 
   function saveCurrentWorkingDeck() {
-    const target = selectedKaibaDeck || deckName || kaibaSaveName
+    const target = selectedKaibaDeck || deckName
     void saveKaibaDeck(target)
+  }
+
+  function openDeckContextMenu(event: MouseEvent<HTMLButtonElement>, fileName: string) {
+    event.preventDefault()
+    setDeckContextMenu({ fileName, x: event.clientX, y: event.clientY })
   }
 
   useEffect(() => {
@@ -1076,8 +1147,8 @@ function App() {
               Sets & Products
             </button>
           </div>
-          <button type="button" onClick={() => void launchYgopro()}>
-            Launch YGOPRO
+          <button type="button" onClick={() => void launchSimulator()}>
+            Launch Simulator
           </button>
           <button
             type="button"
@@ -1102,9 +1173,29 @@ function App() {
           <span>{ownedDeckCards}/{deckSize || 0}</span>
           Owned in deck
         </div>
-        <div>
+        <div className="missing-stat" tabIndex={0}>
           <span>{missingCount}</span>
           Missing
+          <div className="missing-dropdown">
+            <div className="cardmarket-prep">
+              <label>
+                Wants list name
+                <input readOnly value={cardmarketListName} />
+              </label>
+              <button
+                type="button"
+                onClick={prepareCardmarketWants}
+                disabled={!missingEntries.length}
+              >
+                Open Wants
+              </button>
+            </div>
+            <textarea
+              readOnly
+              value={missingListText}
+              placeholder="Cards missing from your inventory will appear here."
+            />
+          </div>
         </div>
       </section> : null}
 
@@ -1457,7 +1548,7 @@ function App() {
         <section className="panel kaiba-panel" hidden={appPage !== 'deck'}>
           <div className="panel-heading">
             <div>
-              <h2>KaibaPro Sync</h2>
+              <h2>Decks</h2>
               <p>{kaibaDeckDir || kaibaStatus}</p>
               {repoDeckDir ? <p>Repo mirror: {repoDeckDir}</p> : null}
             </div>
@@ -1466,33 +1557,6 @@ function App() {
                 Refresh
               </button>
             </div>
-          </div>
-          <div className="sync-controls">
-            <div className="save-as-row">
-              <input
-                value={kaibaSaveName}
-                onChange={(event) => setKaibaSaveName(event.target.value)}
-                placeholder="Deck file name"
-              />
-              <button type="button" onClick={() => void saveKaibaDeck(kaibaSaveName)}>
-                Save As
-              </button>
-            </div>
-            <button
-              type="button"
-              disabled={!selectedKaibaDeck}
-              onClick={() => void saveKaibaDeck(selectedKaibaDeck)}
-            >
-              Save Current
-            </button>
-            <button
-              type="button"
-              disabled={!selectedKaibaDeck || isDeckHistoryLoading}
-              onClick={() => void loadDeckHistory()}
-            >
-              History
-            </button>
-            <p className="sync-status">{kaibaStatus}</p>
           </div>
           {selectedKaibaDeck ? (
             <div className="deck-history">
@@ -1535,17 +1599,11 @@ function App() {
                     className="kaiba-deck-open"
                     type="button"
                     onClick={() => void openKaibaDeck(deckFile.fileName)}
+                    onContextMenu={(event) => openDeckContextMenu(event, deckFile.fileName)}
                   >
                     <img src="/kaibacorp-logo.png" alt="" />
                     <strong>{deckFile.name}</strong>
                     <span>{new Date(deckFile.updatedAt).toLocaleString()}</span>
-                  </button>
-                  <button
-                    className="danger-button"
-                    type="button"
-                    onClick={() => void deleteKaibaDeck(deckFile.fileName)}
-                  >
-                    Delete
                   </button>
                 </div>
               ))
@@ -1553,34 +1611,23 @@ function App() {
               <p className="empty-state">Refresh to list KaibaPro decks.</p>
             )}
           </div>
+          {deckContextMenu ? (
+            <div
+              className="deck-context-menu"
+              style={{ left: deckContextMenu.x, top: deckContextMenu.y }}
+              onMouseLeave={() => setDeckContextMenu(null)}
+            >
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => void deleteKaibaDeck(deckContextMenu.fileName)}
+              >
+                Delete
+              </button>
+            </div>
+          ) : null}
         </section>
 
-        <section className="panel missing-panel" hidden={appPage !== 'deck'}>
-          <div className="panel-heading">
-            <div>
-              <h2>Missing Cards</h2>
-              <p>Open Cardmarket with the missing cards from this deck.</p>
-            </div>
-          </div>
-          <div className="cardmarket-prep">
-            <label>
-              Wants list name
-              <input readOnly value={cardmarketListName} />
-            </label>
-            <button
-              type="button"
-              onClick={prepareCardmarketWants}
-              disabled={!missingEntries.length}
-            >
-              Open Wants
-            </button>
-          </div>
-          <textarea
-            readOnly
-            value={missingListText}
-            placeholder="Cards missing from your inventory will appear here."
-          />
-        </section>
       </section>
 
       {previewCard ? (
