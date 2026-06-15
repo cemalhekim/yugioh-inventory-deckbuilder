@@ -802,15 +802,6 @@ function App() {
     updateDeckCard(zone, card, 1)
   }
 
-  function sortCurrentDeck() {
-    setDeck((current) => ({
-      main: sortDeckEntries(current.main),
-      extra: sortDeckEntries(current.extra),
-      side: sortDeckEntries(current.side),
-    }))
-    setStatus('Deck sorted by card type and name.')
-  }
-
   function prepareCardmarketWants() {
     const listName = createTimestampedName(deckName)
     setCardmarketListName(listName)
@@ -1231,16 +1222,6 @@ function App() {
     setDeckContextMenu({ fileName, x: event.clientX, y: event.clientY })
   }
 
-  useEffect(() => {
-    if (!selectedKaibaDeck) return
-
-    const timeout = window.setTimeout(() => {
-      void saveKaibaDeck(selectedKaibaDeck, true)
-    }, 900)
-
-    return () => window.clearTimeout(timeout)
-  }, [saveKaibaDeck, selectedKaibaDeck])
-
   async function importYdk(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
@@ -1654,9 +1635,6 @@ function App() {
                 </button>
                 <button type="button" onClick={saveCurrentWorkingDeck}>
                   Save Deck
-                </button>
-                <button type="button" onClick={sortCurrentDeck}>
-                  Sort
                 </button>
               </div>
             </div>
