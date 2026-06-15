@@ -1164,6 +1164,34 @@ function App() {
     }
   }
 
+  async function deleteDeckVersion(version: DeckVersion) {
+    if (!selectedKaibaDeck) return
+
+    const label = version.note?.trim() || version.branchName || version.source
+    const confirmed = window.confirm(
+      `Delete "${label}" and every version after it from ${selectedKaibaDeck} history?`,
+    )
+    if (!confirmed) return
+
+    setKaibaStatus(`Deleting history from ${selectedKaibaDeck}...`)
+    try {
+      const response = await fetch(
+        `/api/kaibapro/decks/${encodeURIComponent(selectedKaibaDeck)}/history/${encodeURIComponent(version.id)}`,
+        { method: 'DELETE' },
+      )
+      if (!response.ok) throw new Error(`Could not delete history for ${selectedKaibaDeck}.`)
+      const payload = (await response.json()) as {
+        deletedIds: string[]
+        versions: DeckVersion[]
+      }
+      setDeckHistory(payload.versions)
+      setVersionContextMenu(null)
+      setKaibaStatus(`Deleted ${payload.deletedIds.length} history versions.`)
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Delete history failed.')
+    }
+  }
+
   async function deleteKaibaDeck(fileName: string) {
     const confirmed = window.confirm(`Delete ${fileName} from the KaibaPro deck folder?`)
     if (!confirmed) return
@@ -1858,6 +1886,13 @@ function App() {
                 onClick={() => void addDeckVersionNote(versionContextMenu.version)}
               >
                 Add Notes
+              </button>
+              <button
+                type="button"
+                className="context-danger-button"
+                onClick={() => void deleteDeckVersion(versionContextMenu.version)}
+              >
+                Delete
               </button>
             </div>
           ) : null}

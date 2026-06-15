@@ -434,6 +434,11 @@ button:disabled {
   z-index: 20;
 }
 
+.context-danger-button {
+  border-color: rgba(255, 87, 116, 0.65);
+  color: #ffd7df;
+}
+
 .set-list strong,
 .set-summary strong,
 .kaiba-deck-list strong {

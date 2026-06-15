@@ -315,6 +315,34 @@ async function updateDeckVersionNote(fileName: string, versionId: string, note: 
   await writeDeckBranchMeta(fileName, meta)
 }
 
+async function deleteDeckVersionsFrom(fileName: string, versionId: string) {
+  getSafeDeckVersionPath(fileName, versionId)
+  const versions = await listDeckVersions(fileName)
+  const targetVersion = versions.find((version) => version.id === versionId)
+  if (!targetVersion) throw new Error('Deck version not found.')
+
+  const deletedIds = versions
+    .filter((version) => version.createdAt >= targetVersion.createdAt)
+    .map((version) => version.id)
+  const deletedIdSet = new Set(deletedIds)
+
+  await Promise.all(
+    deletedIds.map((deletedId) =>
+      fs.rm(getSafeDeckVersionPath(fileName, deletedId), { force: true }),
+    ),
+  )
+
+  const meta = await readDeckBranchMeta(fileName)
+  for (const [metaVersionId, value] of Object.entries(meta)) {
+    if (deletedIdSet.has(metaVersionId) || deletedIdSet.has(value.parentId ?? '')) {
+      delete meta[metaVersionId]
+    }
+  }
+  await writeDeckBranchMeta(fileName, meta)
+
+  return deletedIds
+}
+
 async function copyDeckAndRecordVersion(
   fileName: string,
   sourcePath: string,
@@ -588,6 +616,30 @@ function kaibaProDecksPlugin(): Plugin {
               deckDir,
               repoDeckDir,
               fileName: safeFileName,
+              versions: await listDeckVersions(safeFileName),
+            })
+            return
+          }
+
+          const versionDeleteMatch = decodeURIComponent(req.url ?? '').match(
+            /^\/([^/]+)\/history\/([^/]+)$/,
+          )
+          if (versionDeleteMatch) {
+            await syncDeckDirectories(deckDir)
+            const [, fileName, versionId] = versionDeleteMatch
+
+            if (req.method !== 'DELETE') {
+              sendJson(res, 405, { error: 'Method not allowed' })
+              return
+            }
+
+            const safeFileName = getSafeDeckPath(repoDeckDir, fileName).fileName
+            const deletedIds = await deleteDeckVersionsFrom(safeFileName, versionId)
+            sendJson(res, 200, {
+              deckDir,
+              repoDeckDir,
+              fileName: safeFileName,
+              deletedIds,
               versions: await listDeckVersions(safeFileName),
             })
             return
