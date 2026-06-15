@@ -1188,7 +1188,7 @@ function App() {
     }
   }
 
-  const saveKaibaDeck = useCallback(async (fileNameOrName: string, quiet = false) => {
+  const saveKaibaDeck = useCallback(async (fileNameOrName: string, quiet = false, note = '') => {
     const target = fileNameOrName.trim()
     if (!target) {
       setKaibaStatus('Choose a KaibaPro deck or enter a save-as name.')
@@ -1199,13 +1199,14 @@ function App() {
       const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(target)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: createYdk(deck, deckName) }),
+        body: JSON.stringify({ content: createYdk(deck, deckName), note }),
       })
       if (!response.ok) throw new Error('Could not save KaibaPro deck.')
       const payload = (await response.json()) as { fileName: string }
       setSelectedKaibaDeck(payload.fileName)
       if (!quiet) setKaibaStatus(`Saved ${payload.fileName}.`)
       await refreshKaibaDecks()
+      await loadDeckHistory(payload.fileName)
     } catch (error) {
       setKaibaStatus(error instanceof Error ? error.message : 'Save deck failed.')
     }
@@ -1213,7 +1214,9 @@ function App() {
 
   function saveCurrentWorkingDeck() {
     const target = selectedKaibaDeck || deckName
-    void saveKaibaDeck(target)
+    const note = window.prompt('Save note', new Date().toLocaleString())
+    if (note === null) return
+    void saveKaibaDeck(target, false, note)
   }
 
   function openDeckContextMenu(event: MouseEvent<HTMLButtonElement>, fileName: string) {

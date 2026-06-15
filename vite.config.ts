@@ -249,7 +249,7 @@ async function writeDeckBranchMeta(
   )
 }
 
-async function writeDeckVersion(fileName: string, content: string, source: string) {
+async function writeDeckVersion(fileName: string, content: string, source: string, note = '') {
   const historyPath = getDeckHistoryDir(fileName)
   const hash = createHash('sha256').update(content).digest('hex').slice(0, 12)
   const versions = await listDeckVersions(fileName)
@@ -271,6 +271,11 @@ async function writeDeckVersion(fileName: string, content: string, source: strin
   const versionId = `${timestamp}--${safeSource}--${hash}.ydk`
   const versionPath = getSafeDeckVersionPath(fileName, versionId)
   await fs.writeFile(versionPath, content, 'utf8')
+  if (note.trim()) {
+    const meta = await readDeckBranchMeta(fileName)
+    meta[versionId] = { ...meta[versionId], note: note.trim() }
+    await writeDeckBranchMeta(fileName, meta)
+  }
   return versionId
 }
 
@@ -678,7 +683,10 @@ function kaibaProDecksPlugin(): Plugin {
           }
 
           if (req.method === 'PUT') {
-            const body = JSON.parse(await readRequestBody(req)) as { content?: string }
+            const body = JSON.parse(await readRequestBody(req)) as {
+              content?: string
+              note?: string
+            }
             if (typeof body.content !== 'string') {
               sendJson(res, 400, { error: 'content must be a string' })
               return
@@ -687,7 +695,12 @@ function kaibaProDecksPlugin(): Plugin {
               fs.writeFile(deckPath, body.content, 'utf8'),
               fs.writeFile(repoDeckPath, body.content, 'utf8'),
             ])
-            await writeDeckVersion(fileName, body.content, 'save')
+            await writeDeckVersion(
+              fileName,
+              body.content,
+              'save',
+              typeof body.note === 'string' ? body.note : '',
+            )
             sendJson(res, 200, { deckDir, repoDeckDir, fileName })
             return
           }
