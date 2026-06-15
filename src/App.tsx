@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, MouseEvent } from 'react'
+import {
+  Gitgraph,
+  MergeStyle,
+  Orientation,
+  TemplateName,
+  templateExtend,
+} from '@gitgraph/react'
 import './App.css'
 
 type DeckZone = 'main' | 'extra' | 'side'
@@ -98,6 +105,20 @@ const historyRowHeight = 56
 const historyLaneWidth = 34
 const historyLaneStart = 18
 const historyLaneColors = ['#39c8ff', '#f7d45c', '#e218a9', '#18df35', '#f0a21b', '#9f22ff']
+const historyGraphTemplate = templateExtend(TemplateName.Metro, {
+  colors: historyLaneColors,
+  branch: {
+    lineWidth: 4,
+    mergeStyle: MergeStyle.Bezier,
+    spacing: historyLaneWidth,
+    label: { display: false },
+  },
+  commit: {
+    spacing: historyRowHeight,
+    message: { display: false, displayAuthor: false, displayHash: false },
+    dot: { size: 12, strokeWidth: 3, strokeColor: '#07101f' },
+  },
+})
 
 function isExtraDeckCard(card: YgoCard) {
   return ['Fusion', 'Synchro', 'XYZ', 'Xyz', 'Link'].some((type) =>
@@ -584,58 +605,11 @@ function App() {
   )
   const missingCount = missingEntries.reduce((sum, entry) => sum + entry.missing, 0)
 
-  const deckHistoryGraph = useMemo(() => {
+  const deckHistoryGraphWidth = useMemo(() => {
     const branchNames = Array.from(
       new Set(deckHistory.map((version) => version.branchName).filter(Boolean) as string[]),
     )
-    const laneByBranch = new Map(branchNames.map((name, index) => [name, index + 1]))
-    const nodes = deckHistory.map((version, index) => {
-      const lane = version.branchName ? laneByBranch.get(version.branchName) ?? 1 : 0
-      return {
-        version,
-        index,
-        lane,
-        x: historyLaneStart + lane * historyLaneWidth,
-        y: index * historyRowHeight + historyRowHeight / 2,
-        color: historyLaneColors[lane % historyLaneColors.length],
-      }
-    })
-    const mainColor = historyLaneColors[0]
-    const paths = nodes.flatMap((node) => {
-      if (!node.version.branchName) return []
-
-      const parentIndex = node.version.parentId
-        ? nodes.find((candidate) => candidate.version.id === node.version.parentId)?.index
-        : undefined
-      const parentY =
-        typeof parentIndex === 'number'
-          ? parentIndex * historyRowHeight + historyRowHeight / 2
-          : node.y + historyRowHeight * 0.7
-      const mainX = historyLaneStart
-      const controlY = (parentY + node.y) / 2
-
-      return [
-        {
-          color: node.color,
-          d: `M ${mainX} ${parentY} C ${mainX + 18} ${controlY}, ${node.x - 18} ${controlY}, ${node.x} ${node.y}`,
-        },
-        {
-          color: node.color,
-          d: `M ${node.x} ${node.y} L ${node.x} ${Math.min(
-            node.y + historyRowHeight,
-            deckHistory.length * historyRowHeight - historyRowHeight / 2,
-          )}`,
-        },
-      ]
-    })
-
-    return {
-      graphWidth: historyLaneStart + Math.max(branchNames.length, 1) * historyLaneWidth + 18,
-      graphHeight: Math.max(deckHistory.length * historyRowHeight, historyRowHeight),
-      mainColor,
-      nodes,
-      paths,
-    }
+    return historyLaneStart + Math.max(branchNames.length, 1) * historyLaneWidth + 42
   }, [deckHistory])
 
   const filteredSets = useMemo(() => {
@@ -1729,27 +1703,57 @@ function App() {
                 <div
                   className="deck-history-graph"
                   style={{
-                    ['--history-graph-width' as string]: `${deckHistoryGraph.graphWidth}px`,
+                    ['--history-graph-width' as string]: `${deckHistoryGraphWidth}px`,
                   }}
                 >
-                  <svg
-                    aria-hidden="true"
-                    className="deck-history-lines"
-                    height={deckHistoryGraph.graphHeight}
-                    viewBox={`0 0 ${deckHistoryGraph.graphWidth} ${deckHistoryGraph.graphHeight}`}
-                    width={deckHistoryGraph.graphWidth}
-                  >
-                    <path
-                      d={`M ${historyLaneStart} ${historyRowHeight / 2} L ${historyLaneStart} ${
-                        deckHistoryGraph.graphHeight - historyRowHeight / 2
-                      }`}
-                      stroke={deckHistoryGraph.mainColor}
-                    />
-                    {deckHistoryGraph.paths.map((path) => (
-                      <path d={path.d} key={path.d} stroke={path.color} />
-                    ))}
-                  </svg>
-                  {deckHistoryGraph.nodes.map(({ version, x, color }) => (
+                  <div className="deck-history-gitgraph" aria-hidden="true">
+                    <Gitgraph
+                      key={deckHistory.map((version) => version.id).join('|')}
+                      options={{
+                        branchLabelOnEveryCommit: false,
+                        commitMessage: '',
+                        orientation: Orientation.VerticalReverse,
+                        template: historyGraphTemplate,
+                      }}
+                    >
+                      {(gitgraph) => {
+                        const chronologicalHistory = [...deckHistory].reverse()
+                        const branches = new Map<string, ReturnType<typeof gitgraph.branch>>()
+                        const commitHashesByVersionId = new Map<string, string>()
+                        const main = gitgraph.branch('main')
+                        branches.set('main', main)
+
+                        for (const version of chronologicalHistory) {
+                          const commitHash = version.hash || version.id.replace(/\.ydk$/i, '')
+                          const subject = version.branchName
+                            ? `branch: ${version.branchName}`
+                            : version.source
+
+                          if (!version.branchName) {
+                            main.commit({ hash: commitHash, subject })
+                            commitHashesByVersionId.set(version.id, commitHash)
+                            continue
+                          }
+
+                          const parentHash = version.parentId
+                            ? commitHashesByVersionId.get(version.parentId)
+                            : undefined
+                          const branchName = version.branchName
+                          const branch =
+                            branches.get(branchName) ??
+                            gitgraph.branch({
+                              from: parentHash ?? main,
+                              name: branchName,
+                            })
+
+                          branches.set(branchName, branch)
+                          branch.commit({ hash: commitHash, subject })
+                          commitHashesByVersionId.set(version.id, commitHash)
+                        }
+                      }}
+                    </Gitgraph>
+                  </div>
+                  {deckHistory.map((version) => (
                     <div
                       className={
                         version.branchName
@@ -1763,10 +1767,6 @@ function App() {
                         className="deck-history-node"
                         aria-label="Version actions"
                         role="button"
-                        style={{
-                          ['--history-node-color' as string]: color,
-                          ['--history-node-x' as string]: `${x}px`,
-                        }}
                         tabIndex={0}
                       />
                       <div>

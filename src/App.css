@@ -526,7 +526,8 @@ button:disabled {
   position: relative;
 }
 
-.deck-history-lines {
+.deck-history-gitgraph {
+  height: 100%;
   left: 10px;
   pointer-events: none;
   position: absolute;
@@ -534,33 +535,20 @@ button:disabled {
   z-index: 0;
 }
 
-.deck-history-lines path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 4;
+.deck-history-gitgraph svg {
+  display: block;
+  overflow: visible;
 }
 
 .deck-history-node {
-  background: var(--kc-bg);
-  border: 3px solid var(--history-node-color, var(--kc-cyan));
-  border-radius: 999px;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--history-node-color, var(--kc-cyan)) 45%, transparent);
-  cursor: context-menu;
-  height: 13px;
-  justify-self: start;
-  margin-left: calc(var(--history-node-x, 18px) - 7px);
+  height: 100%;
   position: relative;
-  width: 13px;
+  width: 100%;
   z-index: 1;
 }
 
 .branch-version {
   background: rgba(57, 200, 255, 0.06);
-}
-
-.branch-version .deck-history-node {
-  box-shadow: 0 0 12px color-mix(in srgb, var(--history-node-color, var(--kc-warning)) 45%, transparent);
 }
 
 .deck-history-row > div:not(.deck-history-node) {
