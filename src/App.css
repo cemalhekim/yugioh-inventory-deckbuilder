@@ -526,19 +526,23 @@ button:disabled {
   position: relative;
 }
 
-.deck-history-gitgraph {
-  height: 100%;
+.deck-history-lines {
   left: 10px;
   pointer-events: none;
   position: absolute;
   top: 0;
-  width: var(--history-graph-width, 64px);
   z-index: 3;
 }
 
-.deck-history-gitgraph svg {
-  display: block;
-  overflow: visible;
+.deck-history-lines path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.deck-history-lines circle {
+  stroke-width: 4;
 }
 
 .deck-history-node {

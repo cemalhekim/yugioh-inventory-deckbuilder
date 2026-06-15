@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, MouseEvent } from 'react'
 import {
-  Gitgraph,
+  GitgraphCore,
   MergeStyle,
   Orientation,
   TemplateName,
   templateExtend,
-} from '@gitgraph/react'
+  toSvgPath,
+} from '@gitgraph/core'
 import './App.css'
 
 type DeckZone = 'main' | 'extra' | 'side'
@@ -605,11 +606,72 @@ function App() {
   )
   const missingCount = missingEntries.reduce((sum, entry) => sum + entry.missing, 0)
 
-  const deckHistoryGraphWidth = useMemo(() => {
+  const deckHistoryGraph = useMemo(() => {
     const branchNames = Array.from(
       new Set(deckHistory.map((version) => version.branchName).filter(Boolean) as string[]),
     )
-    return historyLaneStart + Math.max(branchNames.length, 1) * historyLaneWidth + 42
+    const graph = new GitgraphCore({
+      branchLabelOnEveryCommit: false,
+      commitMessage: '',
+      orientation: Orientation.VerticalReverse,
+      template: historyGraphTemplate,
+    })
+    const gitgraph = graph.getUserApi()
+    const chronologicalHistory = [...deckHistory].reverse()
+    const branches = new Map<string, ReturnType<typeof gitgraph.branch>>()
+    const commitHashesByVersionId = new Map<string, string>()
+    const main = gitgraph.branch('main')
+    branches.set('main', main)
+
+    for (const version of chronologicalHistory) {
+      const commitHash = version.hash || version.id.replace(/\.ydk$/i, '')
+      const subject = version.branchName ? `branch: ${version.branchName}` : version.source
+
+      if (!version.branchName) {
+        main.commit({ hash: commitHash, subject })
+        commitHashesByVersionId.set(version.id, commitHash)
+        continue
+      }
+
+      const parentHash = version.parentId
+        ? commitHashesByVersionId.get(version.parentId)
+        : undefined
+      const branchName = version.branchName
+      const branch =
+        branches.get(branchName) ??
+        gitgraph.branch({
+          from: parentHash ?? main,
+          name: branchName,
+        })
+
+      branches.set(branchName, branch)
+      branch.commit({ hash: commitHash, subject })
+      commitHashesByVersionId.set(version.id, commitHash)
+    }
+
+    const rendered = graph.getRenderedData()
+    const commits = rendered.commits.map((commit) => ({
+      color: commit.style.color ?? historyLaneColors[0],
+      hash: commit.hash,
+      x: commit.x,
+      y: commit.y,
+    }))
+    const paths = Array.from(rendered.branchesPaths).map(([branch, coordinates]) => ({
+      color: branch.style.color ?? historyLaneColors[0],
+      d: toSvgPath(coordinates, true, true),
+    }))
+    const maxX = Math.max(...commits.map((commit) => commit.x), 0)
+    const maxY = Math.max(...commits.map((commit) => commit.y), 0)
+
+    return {
+      commits,
+      graphHeight: maxY + historyRowHeight,
+      graphWidth: Math.max(
+        historyLaneStart + Math.max(branchNames.length, 1) * historyLaneWidth + 42,
+        maxX + 42,
+      ),
+      paths,
+    }
   }, [deckHistory])
 
   const filteredSets = useMemo(() => {
@@ -1703,56 +1765,30 @@ function App() {
                 <div
                   className="deck-history-graph"
                   style={{
-                    ['--history-graph-width' as string]: `${deckHistoryGraphWidth}px`,
+                    ['--history-graph-width' as string]: `${deckHistoryGraph.graphWidth}px`,
                   }}
                 >
-                  <div className="deck-history-gitgraph" aria-hidden="true">
-                    <Gitgraph
-                      key={deckHistory.map((version) => version.id).join('|')}
-                      options={{
-                        branchLabelOnEveryCommit: false,
-                        commitMessage: '',
-                        orientation: Orientation.VerticalReverse,
-                        template: historyGraphTemplate,
-                      }}
-                    >
-                      {(gitgraph) => {
-                        const chronologicalHistory = [...deckHistory].reverse()
-                        const branches = new Map<string, ReturnType<typeof gitgraph.branch>>()
-                        const commitHashesByVersionId = new Map<string, string>()
-                        const main = gitgraph.branch('main')
-                        branches.set('main', main)
-
-                        for (const version of chronologicalHistory) {
-                          const commitHash = version.hash || version.id.replace(/\.ydk$/i, '')
-                          const subject = version.branchName
-                            ? `branch: ${version.branchName}`
-                            : version.source
-
-                          if (!version.branchName) {
-                            main.commit({ hash: commitHash, subject })
-                            commitHashesByVersionId.set(version.id, commitHash)
-                            continue
-                          }
-
-                          const parentHash = version.parentId
-                            ? commitHashesByVersionId.get(version.parentId)
-                            : undefined
-                          const branchName = version.branchName
-                          const branch =
-                            branches.get(branchName) ??
-                            gitgraph.branch({
-                              from: parentHash ?? main,
-                              name: branchName,
-                            })
-
-                          branches.set(branchName, branch)
-                          branch.commit({ hash: commitHash, subject })
-                          commitHashesByVersionId.set(version.id, commitHash)
-                        }
-                      }}
-                    </Gitgraph>
-                  </div>
+                  <svg
+                    aria-hidden="true"
+                    className="deck-history-lines"
+                    height={deckHistoryGraph.graphHeight}
+                    viewBox={`0 0 ${deckHistoryGraph.graphWidth} ${deckHistoryGraph.graphHeight}`}
+                    width={deckHistoryGraph.graphWidth}
+                  >
+                    {deckHistoryGraph.paths.map((path) => (
+                      <path d={path.d} key={`${path.color}-${path.d}`} stroke={path.color} />
+                    ))}
+                    {deckHistoryGraph.commits.map((commit) => (
+                      <circle
+                        cx={commit.x}
+                        cy={commit.y}
+                        fill="var(--kc-bg)"
+                        key={commit.hash}
+                        r="7"
+                        stroke={commit.color}
+                      />
+                    ))}
+                  </svg>
                   {deckHistory.map((version) => (
                     <div
                       className={
