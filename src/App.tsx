@@ -463,7 +463,6 @@ function App() {
     x: number
     y: number
   } | null>(null)
-  const [isRepoStateReady, setIsRepoStateReady] = useState(false)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
@@ -516,8 +515,6 @@ function App() {
         setStatus('Loaded inventory from repository backup.')
       } catch {
         // Static previews do not provide the local repo state API.
-      } finally {
-        if (!canceled) setIsRepoStateReady(true)
       }
     }
 
@@ -1377,16 +1374,6 @@ function App() {
       }
     }
   }, [deck, deckName, inventory])
-
-  useEffect(() => {
-    if (!isRepoStateReady) return
-
-    const timeout = window.setTimeout(() => {
-      void saveRepoBackup(true)
-    }, 1200)
-
-    return () => window.clearTimeout(timeout)
-  }, [deck, deckName, inventory, isRepoStateReady, saveRepoBackup])
 
   async function importBackup(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
