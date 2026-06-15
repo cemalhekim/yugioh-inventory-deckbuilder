@@ -1140,11 +1140,13 @@ function App() {
     }
   }
 
-  async function restoreDeckVersion(versionId: string) {
+  async function restoreDeckVersion(versionId: string, confirmFirst = true) {
     if (!selectedKaibaDeck) return
 
-    const confirmed = window.confirm(`Restore ${selectedKaibaDeck} to this version?`)
-    if (!confirmed) return
+    if (confirmFirst) {
+      const confirmed = window.confirm(`Restore ${selectedKaibaDeck} to this version?`)
+      if (!confirmed) return
+    }
 
     setKaibaStatus(`Restoring ${selectedKaibaDeck}...`)
     try {
@@ -1820,11 +1822,11 @@ function App() {
                       }
                       key={version.id}
                       onContextMenu={(event) => openVersionContextMenu(event, version)}
-                      onDoubleClick={() => void restoreDeckVersion(version.id)}
+                      onDoubleClick={() => void restoreDeckVersion(version.id, false)}
                       onKeyDown={(event) => {
                         if (event.key !== 'Enter') return
                         event.preventDefault()
-                        void restoreDeckVersion(version.id)
+                        void restoreDeckVersion(version.id, false)
                       }}
                       role="button"
                       tabIndex={0}
