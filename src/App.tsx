@@ -777,7 +777,7 @@ function App() {
 
   async function chooseKaibaDeckFolder() {
     const confirmed = window.confirm(
-      'Simulator file pathindeki decklerin .ydk dosyalarinin bulundugu klasoru sec. OK dedikten sonra klasor secici acilacak; secimden sonra simulator deckleri repo decks klasoruyle senkronize edilecek ve deck history snapshotlari olusturulacak.',
+      'Select the simulator deck directory that contains the active .ydk deck files. After you press OK, the operating system folder picker will open. Once a folder is selected, the app will scan that directory, mirror all .ydk files into this repository\'s decks/ folder, copy newer deck files in both directions based on file modification time, update the KaibaPro deck list, and create per-deck version-history snapshots under decks/.history so previous deck states can be restored later.',
     )
     if (!confirmed) return
 
