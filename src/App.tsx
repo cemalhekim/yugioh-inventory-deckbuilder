@@ -39,6 +39,14 @@ type KaibaDeckFile = {
   size: number
 }
 
+type DeckVersion = {
+  id: string
+  createdAt: string
+  source: string
+  hash: string
+  size: number
+}
+
 type InventoryEntry = {
   card: YgoCard
   quantity: number
@@ -393,10 +401,13 @@ function App() {
   const [kaibaDeckDir, setKaibaDeckDir] = useState(
     () => localStorage.getItem(KAIBAPRO_DECK_DIR_KEY) ?? '',
   )
+  const [repoDeckDir, setRepoDeckDir] = useState('')
   const [selectedKaibaDeck, setSelectedKaibaDeck] = useState('')
   const [kaibaSaveName, setKaibaSaveName] = useState('')
   const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
   const [isKaibaFolderPicking, setIsKaibaFolderPicking] = useState(false)
+  const [deckHistory, setDeckHistory] = useState<DeckVersion[]>([])
+  const [isDeckHistoryLoading, setIsDeckHistoryLoading] = useState(false)
   const [isRepoStateReady, setIsRepoStateReady] = useState(false)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -712,12 +723,20 @@ function App() {
       if (!response.ok) throw new Error('Could not connect to KaibaPro deck folder.')
       const payload = (await response.json()) as {
         deckDir: string
+        repoDeckDir: string
         decks: KaibaDeckFile[]
+        syncResult?: { copiedToKaiba: number; copiedToRepo: number }
       }
       setKaibaDeckDir(payload.deckDir)
+      setRepoDeckDir(payload.repoDeckDir)
       localStorage.setItem(KAIBAPRO_DECK_DIR_KEY, payload.deckDir)
       setKaibaDecks(payload.decks)
-      setKaibaStatus(`Found ${payload.decks.length} KaibaPro decks.`)
+      const copied = (payload.syncResult?.copiedToKaiba ?? 0) + (payload.syncResult?.copiedToRepo ?? 0)
+      setKaibaStatus(
+        copied
+          ? `Synced ${copied} decks. Found ${payload.decks.length} KaibaPro decks.`
+          : `Found ${payload.decks.length} KaibaPro decks.`,
+      )
     } catch (error) {
       setKaibaStatus(
         error instanceof Error ? error.message : 'KaibaPro connection failed.',
@@ -764,7 +783,11 @@ function App() {
         method: 'POST',
       })
       if (!response.ok) throw new Error('Could not select KaibaPro deck folder.')
-      const payload = (await response.json()) as { deckDir: string; canceled?: boolean }
+      const payload = (await response.json()) as {
+        deckDir: string
+        repoDeckDir?: string
+        canceled?: boolean
+      }
       if (payload.canceled) {
         setKaibaStatus('Folder selection canceled.')
         return
@@ -772,7 +795,9 @@ function App() {
 
       setSelectedKaibaDeck('')
       setKaibaSaveName('')
+      setDeckHistory([])
       setKaibaDeckDir(payload.deckDir)
+      if (payload.repoDeckDir) setRepoDeckDir(payload.repoDeckDir)
       localStorage.setItem(KAIBAPRO_DECK_DIR_KEY, payload.deckDir)
       await refreshKaibaDecks()
     } catch (error) {
@@ -817,8 +842,57 @@ function App() {
       setSelectedKaibaDeck(payload.fileName)
       setKaibaSaveName(payload.name)
       setKaibaStatus(`Loaded ${payload.fileName}.`)
+      await loadDeckHistory(payload.fileName)
     } catch (error) {
       setKaibaStatus(error instanceof Error ? error.message : 'Open deck failed.')
+    }
+  }
+
+  async function loadDeckHistory(fileName = selectedKaibaDeck) {
+    if (!fileName) {
+      setKaibaStatus('Open a deck before loading history.')
+      return
+    }
+
+    setIsDeckHistoryLoading(true)
+    try {
+      const response = await fetch(
+        `/api/kaibapro/decks/${encodeURIComponent(fileName)}/history`,
+      )
+      if (!response.ok) throw new Error(`Could not load history for ${fileName}.`)
+      const payload = (await response.json()) as {
+        fileName: string
+        versions: DeckVersion[]
+      }
+      setDeckHistory(payload.versions)
+      setKaibaStatus(`Loaded ${payload.versions.length} versions for ${payload.fileName}.`)
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Load history failed.')
+    } finally {
+      setIsDeckHistoryLoading(false)
+    }
+  }
+
+  async function restoreDeckVersion(versionId: string) {
+    if (!selectedKaibaDeck) return
+
+    const confirmed = window.confirm(`Restore ${selectedKaibaDeck} to this version?`)
+    if (!confirmed) return
+
+    setKaibaStatus(`Restoring ${selectedKaibaDeck}...`)
+    try {
+      const response = await fetch(
+        `/api/kaibapro/decks/${encodeURIComponent(selectedKaibaDeck)}/history/${encodeURIComponent(versionId)}/restore`,
+        { method: 'POST' },
+      )
+      if (!response.ok) throw new Error(`Could not restore ${selectedKaibaDeck}.`)
+      const payload = (await response.json()) as { fileName: string }
+      await openKaibaDeck(payload.fileName)
+      await refreshKaibaDecks()
+      await loadDeckHistory(payload.fileName)
+      setKaibaStatus(`Restored ${payload.fileName}.`)
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Restore failed.')
     }
   }
 
@@ -836,6 +910,7 @@ function App() {
       if (selectedKaibaDeck === fileName) {
         setSelectedKaibaDeck('')
         setKaibaSaveName('')
+        setDeckHistory([])
       }
 
       setKaibaStatus(`Deleted ${fileName}.`)
@@ -1372,6 +1447,7 @@ function App() {
             <div>
               <h2>KaibaPro Sync</h2>
               <p>{kaibaDeckDir || kaibaStatus}</p>
+              {repoDeckDir ? <p>Repo mirror: {repoDeckDir}</p> : null}
             </div>
             <div className="kaiba-folder-actions">
               <button
@@ -1404,8 +1480,41 @@ function App() {
             >
               Save Current
             </button>
+            <button
+              type="button"
+              disabled={!selectedKaibaDeck || isDeckHistoryLoading}
+              onClick={() => void loadDeckHistory()}
+            >
+              History
+            </button>
             <p className="sync-status">{kaibaStatus}</p>
           </div>
+          {selectedKaibaDeck ? (
+            <div className="deck-history">
+              <div className="deck-history-heading">
+                <strong>{selectedKaibaDeck} history</strong>
+                <span>{deckHistory.length} versions</span>
+              </div>
+              {deckHistory.length ? (
+                deckHistory.map((version) => (
+                  <div className="deck-history-row" key={version.id}>
+                    <div>
+                      <strong>{new Date(version.createdAt).toLocaleString()}</strong>
+                      <span>{version.source} - {version.hash || version.id}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void restoreDeckVersion(version.id)}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="empty-state">No versions yet.</p>
+              )}
+            </div>
+          ) : null}
           <div className="kaiba-deck-list">
             {kaibaDecks.length ? (
               kaibaDecks.map((deckFile) => (

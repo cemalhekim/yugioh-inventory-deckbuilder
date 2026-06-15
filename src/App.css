@@ -458,7 +458,7 @@ button:disabled {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(280px, 1fr) auto minmax(220px, 0.8fr);
+  grid-template-columns: minmax(280px, 1fr) auto auto minmax(220px, 0.8fr);
 }
 
 .kaiba-folder-actions {
@@ -487,6 +487,57 @@ button:disabled {
   color: var(--kc-muted);
   font-size: 12px;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deck-history {
+  border-bottom: 1px solid rgba(90, 190, 255, 0.22);
+  border-top: 1px solid rgba(90, 190, 255, 0.22);
+  display: grid;
+  margin-top: 12px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.deck-history-heading,
+.deck-history-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.deck-history-heading {
+  background: rgba(10, 26, 48, 0.84);
+  color: var(--kc-text);
+  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.deck-history-heading span,
+.deck-history-row span {
+  color: var(--kc-muted);
+  font-size: 12px;
+}
+
+.deck-history-row {
+  border-top: 1px solid rgba(90, 190, 255, 0.16);
+}
+
+.deck-history-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.deck-history-row strong,
+.deck-history-row span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
