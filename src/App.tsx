@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent, MouseEvent } from 'react'
+import type { ChangeEvent, DragEvent, MouseEvent } from 'react'
 import './App.css'
 
 type DeckZone = 'main' | 'extra' | 'side'
@@ -45,6 +45,9 @@ type DeckVersion = {
   source: string
   hash: string
   size: number
+  branchName?: string
+  parentId?: string
+  note?: string
 }
 
 type InventoryEntry = {
@@ -90,6 +93,11 @@ const zoneLabels: Record<DeckZone, string> = {
 const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 const cardmarketPayloadHashKey = 'ygo-inventory-wants'
+const cardDragDataType = 'application/ygo-card'
+const historyRowHeight = 56
+const historyLaneWidth = 34
+const historyLaneStart = 18
+const historyLaneColors = ['#39c8ff', '#f7d45c', '#e218a9', '#18df35', '#f0a21b', '#9f22ff']
 
 function isExtraDeckCard(card: YgoCard) {
   return ['Fusion', 'Synchro', 'XYZ', 'Xyz', 'Link'].some((type) =>
@@ -241,7 +249,7 @@ function addCardCopies(deck: DeckState, zone: DeckZone, card: YgoCard, copies = 
   if (copies <= 0) {
     return {
       ...deck,
-      [zone]: upsertEntry(deck[zone], card, copies),
+      [zone]: sortDeckEntries(upsertEntry(deck[zone], card, copies)),
     }
   }
 
@@ -252,7 +260,7 @@ function addCardCopies(deck: DeckState, zone: DeckZone, card: YgoCard, copies = 
 
   return {
     ...deck,
-    [zone]: upsertEntry(deck[zone], card, nextCopies),
+    [zone]: sortDeckEntries(upsertEntry(deck[zone], card, nextCopies)),
   }
 }
 
@@ -415,6 +423,11 @@ function App() {
     x: number
     y: number
   } | null>(null)
+  const [versionContextMenu, setVersionContextMenu] = useState<{
+    version: DeckVersion
+    x: number
+    y: number
+  } | null>(null)
   const [isRepoStateReady, setIsRepoStateReady] = useState(false)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -571,6 +584,60 @@ function App() {
   )
   const missingCount = missingEntries.reduce((sum, entry) => sum + entry.missing, 0)
 
+  const deckHistoryGraph = useMemo(() => {
+    const branchNames = Array.from(
+      new Set(deckHistory.map((version) => version.branchName).filter(Boolean) as string[]),
+    )
+    const laneByBranch = new Map(branchNames.map((name, index) => [name, index + 1]))
+    const nodes = deckHistory.map((version, index) => {
+      const lane = version.branchName ? laneByBranch.get(version.branchName) ?? 1 : 0
+      return {
+        version,
+        index,
+        lane,
+        x: historyLaneStart + lane * historyLaneWidth,
+        y: index * historyRowHeight + historyRowHeight / 2,
+        color: historyLaneColors[lane % historyLaneColors.length],
+      }
+    })
+    const mainColor = historyLaneColors[0]
+    const paths = nodes.flatMap((node) => {
+      if (!node.version.branchName) return []
+
+      const parentIndex = node.version.parentId
+        ? nodes.find((candidate) => candidate.version.id === node.version.parentId)?.index
+        : undefined
+      const parentY =
+        typeof parentIndex === 'number'
+          ? parentIndex * historyRowHeight + historyRowHeight / 2
+          : node.y + historyRowHeight * 0.7
+      const mainX = historyLaneStart
+      const controlY = (parentY + node.y) / 2
+
+      return [
+        {
+          color: node.color,
+          d: `M ${mainX} ${parentY} C ${mainX + 18} ${controlY}, ${node.x - 18} ${controlY}, ${node.x} ${node.y}`,
+        },
+        {
+          color: node.color,
+          d: `M ${node.x} ${node.y} L ${node.x} ${Math.min(
+            node.y + historyRowHeight,
+            deckHistory.length * historyRowHeight - historyRowHeight / 2,
+          )}`,
+        },
+      ]
+    })
+
+    return {
+      graphWidth: historyLaneStart + Math.max(branchNames.length, 1) * historyLaneWidth + 18,
+      graphHeight: Math.max(deckHistory.length * historyRowHeight, historyRowHeight),
+      mainColor,
+      nodes,
+      paths,
+    }
+  }, [deckHistory])
+
   const filteredSets = useMemo(() => {
     const normalizedQuery = productQuery.trim().toLowerCase()
     return sets
@@ -609,9 +676,16 @@ function App() {
     })
   }
 
-  function addToDeck(card: YgoCard) {
-    const targetZone: DeckZone = isExtraDeckCard(card) ? 'extra' : 'main'
+  function addCardToZone(card: YgoCard, targetZone: DeckZone) {
     setDeck((current) => {
+      if (targetZone === 'main' && isExtraDeckCard(card)) {
+        setStatus(`${card.name} belongs in the Extra Deck.`)
+        return current
+      }
+      if (targetZone === 'extra' && !isExtraDeckCard(card)) {
+        setStatus(`${card.name} belongs in the Main or Side Deck.`)
+        return current
+      }
       if (countDeckZoneCards(current, targetZone) >= deckZoneLimits[targetZone]) {
         setStatus(`${zoneLabels[targetZone]} Deck is already at ${deckZoneLimits[targetZone]} cards.`)
         return current
@@ -624,19 +698,36 @@ function App() {
     })
   }
 
+  function addToDeck(card: YgoCard) {
+    addCardToZone(card, isExtraDeckCard(card) ? 'extra' : 'main')
+  }
+
   function addToSideDeck(card: YgoCard) {
-    const targetZone: DeckZone = 'side'
-    setDeck((current) => {
-      if (countDeckZoneCards(current, targetZone) >= deckZoneLimits[targetZone]) {
-        setStatus(`${zoneLabels[targetZone]} Deck is already at ${deckZoneLimits[targetZone]} cards.`)
-        return current
-      }
-      if (countDeckCardCopies(current, card.id) >= maxDeckCopies) {
-        setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
-        return current
-      }
-      return addCardCopies(current, targetZone, card)
-    })
+    addCardToZone(card, 'side')
+  }
+
+  function handleSearchCardDragStart(event: DragEvent<HTMLImageElement>, card: YgoCard) {
+    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.setData(cardDragDataType, JSON.stringify(card))
+  }
+
+  function handleDeckZoneDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!Array.from(event.dataTransfer.types).includes(cardDragDataType)) return
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  function handleDeckZoneDrop(event: DragEvent<HTMLDivElement>, zone: DeckZone) {
+    const rawCard = event.dataTransfer.getData(cardDragDataType)
+    if (!rawCard) return
+
+    event.preventDefault()
+    try {
+      addCardToZone(JSON.parse(rawCard) as YgoCard, zone)
+    } catch {
+      setStatus('Could not add dragged card.')
+    }
   }
 
   function updateDeckCard(zone: DeckZone, card: YgoCard, delta: number) {
@@ -945,6 +1036,72 @@ function App() {
     }
   }
 
+  function openVersionContextMenu(event: MouseEvent<HTMLDivElement>, version: DeckVersion) {
+    event.preventDefault()
+    setDeckContextMenu(null)
+    setVersionContextMenu({
+      version,
+      x: event.clientX,
+      y: event.clientY,
+    })
+  }
+
+  async function branchDeckVersion(versionId: string) {
+    if (!selectedKaibaDeck) {
+      setKaibaStatus('Open a deck before branching.')
+      return
+    }
+
+    const branchName = window.prompt('Branch name')
+    if (!branchName?.trim()) return
+
+    try {
+      const response = await fetch(
+        `/api/kaibapro/decks/${encodeURIComponent(selectedKaibaDeck)}/history/${encodeURIComponent(versionId)}/branch`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ branchName: branchName.trim() }),
+        },
+      )
+      if (!response.ok) throw new Error(`Could not branch ${selectedKaibaDeck}.`)
+      const payload = (await response.json()) as {
+        branchName: string
+        versions: DeckVersion[]
+      }
+      setDeckHistory(payload.versions)
+      setVersionContextMenu(null)
+      setKaibaStatus(`Created branch ${payload.branchName} from ${selectedKaibaDeck}.`)
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Branch deck failed.')
+    }
+  }
+
+  async function addDeckVersionNote(version: DeckVersion) {
+    if (!selectedKaibaDeck) return
+
+    const note = window.prompt('Version note', version.note || version.createdAt)
+    if (note === null) return
+
+    try {
+      const response = await fetch(
+        `/api/kaibapro/decks/${encodeURIComponent(selectedKaibaDeck)}/history/${encodeURIComponent(version.id)}/notes`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note }),
+        },
+      )
+      if (!response.ok) throw new Error(`Could not save note for ${selectedKaibaDeck}.`)
+      const payload = (await response.json()) as { versions: DeckVersion[] }
+      setDeckHistory(payload.versions)
+      setVersionContextMenu(null)
+      setKaibaStatus('Version note saved.')
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Save note failed.')
+    }
+  }
+
   async function restoreDeckVersion(versionId: string) {
     if (!selectedKaibaDeck) return
 
@@ -962,6 +1119,7 @@ function App() {
       await openKaibaDeck(payload.fileName)
       await refreshKaibaDecks()
       await loadDeckHistory(payload.fileName)
+      setVersionContextMenu(null)
       setKaibaStatus(`Restored ${payload.fileName}.`)
     } catch (error) {
       setKaibaStatus(error instanceof Error ? error.message : 'Restore failed.')
@@ -1022,6 +1180,7 @@ function App() {
 
   function openDeckContextMenu(event: MouseEvent<HTMLButtonElement>, fileName: string) {
     event.preventDefault()
+    setVersionContextMenu(null)
     setDeckContextMenu({ fileName, x: event.clientX, y: event.clientY })
   }
 
@@ -1243,6 +1402,9 @@ function App() {
                     <img
                       src={card.card_images?.[0]?.image_url_small}
                       alt=""
+                      draggable
+                      title="Drag to Main, Extra, or Side Deck."
+                      onDragStart={(event) => handleSearchCardDragStart(event, card)}
                       onClick={() => setPreviewCard(card)}
                     />
                     <div className="clickable-card-text" onClick={() => setPreviewCard(card)}>
@@ -1454,7 +1616,12 @@ function App() {
           </div>
           <div className={`deck-zones ${deckViewMode === 'cards' ? 'card-view' : ''}`}>
             {zoneOrder.map((zone) => (
-              <div className="deck-zone" key={zone}>
+              <div
+                className="deck-zone"
+                key={zone}
+                onDragOver={handleDeckZoneDragOver}
+                onDrop={(event) => handleDeckZoneDrop(event, zone)}
+              >
                 <h3>
                   {zoneLabels[zone]}
                   <span>
@@ -1465,42 +1632,25 @@ function App() {
                 {deck[zone].length ? (
                   deckViewMode === 'cards' ? (
                     <div className="deck-card-grid">
-                      {deck[zone].map((entry) => (
-                        <article className="deck-card" key={entry.card.id}>
-                          <img
-                            src={entry.card.card_images?.[0]?.image_url_small}
-                            alt={entry.card.name}
-                            title="Right-click to remove one. Middle-click to add one."
-                            onMouseDown={(event) =>
-                              handleDeckCardMouseDown(event, zone, entry.card)
-                            }
-                            onClick={() => setPreviewCard(entry.card)}
-                            onContextMenu={(event) => {
-                              event.preventDefault()
-                              updateDeckCard(zone, entry.card, -1)
-                            }}
-                          />
-                          <div className="deck-card-footer">
-                            <strong>{entry.quantity}x</strong>
-                            <div className="deck-card-actions">
-                              <button
-                                type="button"
-                                aria-label={`Add ${entry.card.name}`}
-                                onClick={() => updateDeckCard(zone, entry.card, 1)}
-                              >
-                                +
-                              </button>
-                              <button
-                                type="button"
-                                aria-label={`Remove ${entry.card.name}`}
-                                onClick={() => updateDeckCard(zone, entry.card, -1)}
-                              >
-                                -
-                              </button>
-                            </div>
-                          </div>
-                        </article>
-                      ))}
+                      {deck[zone].flatMap((entry) =>
+                        Array.from({ length: entry.quantity }, (_, copyIndex) => (
+                          <article className="deck-card" key={`${entry.card.id}-${copyIndex}`}>
+                            <img
+                              src={entry.card.card_images?.[0]?.image_url_small}
+                              alt={entry.card.name}
+                              title="Right-click to remove one. Middle-click to add one."
+                              onMouseDown={(event) =>
+                                handleDeckCardMouseDown(event, zone, entry.card)
+                              }
+                              onClick={() => setPreviewCard(entry.card)}
+                              onContextMenu={(event) => {
+                                event.preventDefault()
+                                updateDeckCard(zone, entry.card, -1)
+                              }}
+                            />
+                          </article>
+                        )),
+                      )}
                     </div>
                   ) : (
                     deck[zone].map((entry) => (
@@ -1518,22 +1668,6 @@ function App() {
                         <small>
                           owned {inventoryById.get(entry.card.id) ?? 0}
                         </small>
-                        <div className="deck-line-actions">
-                          <button
-                            type="button"
-                            aria-label={`Add ${entry.card.name}`}
-                            onClick={() => updateDeckCard(zone, entry.card, 1)}
-                          >
-                            +
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Remove ${entry.card.name}`}
-                            onClick={() => updateDeckCard(zone, entry.card, -1)}
-                          >
-                            -
-                          </button>
-                        </div>
                       </div>
                     ))
                   )
@@ -1558,32 +1692,6 @@ function App() {
               </button>
             </div>
           </div>
-          {selectedKaibaDeck ? (
-            <div className="deck-history">
-              <div className="deck-history-heading">
-                <strong>{selectedKaibaDeck} history</strong>
-                <span>{deckHistory.length} versions</span>
-              </div>
-              {deckHistory.length ? (
-                deckHistory.map((version) => (
-                  <div className="deck-history-row" key={version.id}>
-                    <div>
-                      <strong>{new Date(version.createdAt).toLocaleString()}</strong>
-                      <span>{version.source} - {version.hash || version.id}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void restoreDeckVersion(version.id)}
-                    >
-                      Restore
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="empty-state">No versions yet.</p>
-              )}
-            </div>
-          ) : null}
           <div className="kaiba-deck-list">
             {kaibaDecks.length ? (
               kaibaDecks.map((deckFile) => (
@@ -1611,6 +1719,77 @@ function App() {
               <p className="empty-state">Refresh to list KaibaPro decks.</p>
             )}
           </div>
+          {selectedKaibaDeck ? (
+            <div className="deck-history">
+              <div className="deck-history-heading">
+                <strong>{selectedKaibaDeck} history</strong>
+                <span>{deckHistory.length} versions</span>
+              </div>
+              {deckHistory.length ? (
+                <div
+                  className="deck-history-graph"
+                  style={{
+                    ['--history-graph-width' as string]: `${deckHistoryGraph.graphWidth}px`,
+                  }}
+                >
+                  <svg
+                    aria-hidden="true"
+                    className="deck-history-lines"
+                    height={deckHistoryGraph.graphHeight}
+                    viewBox={`0 0 ${deckHistoryGraph.graphWidth} ${deckHistoryGraph.graphHeight}`}
+                    width={deckHistoryGraph.graphWidth}
+                  >
+                    <path
+                      d={`M ${historyLaneStart} ${historyRowHeight / 2} L ${historyLaneStart} ${
+                        deckHistoryGraph.graphHeight - historyRowHeight / 2
+                      }`}
+                      stroke={deckHistoryGraph.mainColor}
+                    />
+                    {deckHistoryGraph.paths.map((path) => (
+                      <path d={path.d} key={path.d} stroke={path.color} />
+                    ))}
+                  </svg>
+                  {deckHistoryGraph.nodes.map(({ version, x, color }) => (
+                    <div
+                      className={
+                        version.branchName
+                          ? 'deck-history-row branch-version'
+                          : 'deck-history-row'
+                      }
+                      key={version.id}
+                      onContextMenu={(event) => openVersionContextMenu(event, version)}
+                    >
+                      <div
+                        className="deck-history-node"
+                        aria-label="Version actions"
+                        role="button"
+                        style={{
+                          ['--history-node-color' as string]: color,
+                          ['--history-node-x' as string]: `${x}px`,
+                        }}
+                        tabIndex={0}
+                      />
+                      <div>
+                        <strong>
+                          {version.branchName
+                            ? `branch: ${version.branchName}`
+                            : version.source}
+                        </strong>
+                        <span>
+                          {version.hash || version.id}
+                        </span>
+                      </div>
+                      <span className="deck-history-note">
+                        {version.note?.trim() || new Date(version.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-state">No versions yet.</p>
+              )}
+            </div>
+          ) : null}
           {deckContextMenu ? (
             <div
               className="deck-context-menu"
@@ -1623,6 +1802,32 @@ function App() {
                 onClick={() => void deleteKaibaDeck(deckContextMenu.fileName)}
               >
                 Delete
+              </button>
+            </div>
+          ) : null}
+          {versionContextMenu ? (
+            <div
+              className="deck-context-menu version-context-menu"
+              style={{ left: versionContextMenu.x, top: versionContextMenu.y }}
+              onMouseLeave={() => setVersionContextMenu(null)}
+            >
+              <button
+                type="button"
+                onClick={() => void restoreDeckVersion(versionContextMenu.version.id)}
+              >
+                Restore
+              </button>
+              <button
+                type="button"
+                onClick={() => void branchDeckVersion(versionContextMenu.version.id)}
+              >
+                Branch
+              </button>
+              <button
+                type="button"
+                onClick={() => void addDeckVersionNote(versionContextMenu.version)}
+              >
+                Add Notes
               </button>
             </div>
           ) : null}

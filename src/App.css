@@ -12,6 +12,8 @@
   --kc-ice: #f6fbff;
   --kc-warning: #f7d45c;
   --kc-shadow: 0 0 28px rgba(45, 170, 255, 0.22);
+  --deck-zone-min-height: 360px;
+  --deck-zone-gap: 12px;
 }
 
 .app-shell {
@@ -194,8 +196,11 @@ button:disabled {
 }
 
 .search-panel {
+  display: flex;
+  flex-direction: column;
   grid-column: 1;
   grid-row: 1;
+  height: calc(64px + 40px + 57px + (var(--deck-zone-min-height) * 3) + (var(--deck-zone-gap) * 4));
 }
 
 .panel {
@@ -313,7 +318,8 @@ button:disabled {
 
 .result-list,
 .inventory-list {
-  max-height: 610px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -476,12 +482,11 @@ button:disabled {
 }
 
 .deck-history {
-  border-bottom: 1px solid rgba(90, 190, 255, 0.22);
+  border-bottom: 0;
   border-top: 1px solid rgba(90, 190, 255, 0.22);
   display: grid;
-  margin-top: 12px;
-  max-height: 220px;
-  overflow: auto;
+  margin: 0;
+  overflow: visible;
 }
 
 .deck-history-heading,
@@ -489,8 +494,8 @@ button:disabled {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 44px;
+  grid-template-columns: var(--history-graph-width, 64px) minmax(0, 0.68fr) minmax(180px, 0.32fr);
+  min-height: 56px;
   padding: 8px 10px;
 }
 
@@ -498,6 +503,7 @@ button:disabled {
   background: rgba(10, 26, 48, 0.84);
   color: var(--kc-text);
   font-size: 13px;
+  grid-template-columns: minmax(0, 1fr) auto;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -511,9 +517,53 @@ button:disabled {
 
 .deck-history-row {
   border-top: 1px solid rgba(90, 190, 255, 0.16);
+  cursor: context-menu;
+  position: relative;
 }
 
-.deck-history-row > div {
+.deck-history-graph {
+  display: grid;
+  position: relative;
+}
+
+.deck-history-lines {
+  left: 10px;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  z-index: 0;
+}
+
+.deck-history-lines path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.deck-history-node {
+  background: var(--kc-bg);
+  border: 3px solid var(--history-node-color, var(--kc-cyan));
+  border-radius: 999px;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--history-node-color, var(--kc-cyan)) 45%, transparent);
+  cursor: context-menu;
+  height: 13px;
+  justify-self: start;
+  margin-left: calc(var(--history-node-x, 18px) - 7px);
+  position: relative;
+  width: 13px;
+  z-index: 1;
+}
+
+.branch-version {
+  background: rgba(57, 200, 255, 0.06);
+}
+
+.branch-version .deck-history-node {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--history-node-color, var(--kc-warning)) 45%, transparent);
+}
+
+.deck-history-row > div:not(.deck-history-node) {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -524,6 +574,16 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.deck-history-note {
+  justify-self: end;
+  max-width: 100%;
+  text-align: right;
+}
+
+.version-context-menu {
+  border-color: var(--kc-line-strong);
 }
 
 .kaiba-deck-list {
@@ -576,6 +636,10 @@ button:disabled {
   cursor: zoom-in;
 }
 
+.card-result img[draggable="true"] {
+  cursor: grab;
+}
+
 .card-result strong,
 .line-item strong {
   color: var(--kc-ice);
@@ -622,16 +686,16 @@ button:disabled {
 
 .deck-zones {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 12px;
+  gap: var(--deck-zone-gap);
+  grid-template-columns: 1fr;
+  padding: var(--deck-zone-gap);
 }
 
 .deck-zone {
   background: rgba(4, 12, 24, 0.45);
   border: 1px solid rgba(90, 190, 255, 0.26);
   border-radius: 5px;
-  min-height: 360px;
+  min-height: var(--deck-zone-min-height);
   overflow: hidden;
 }
 
@@ -683,7 +747,7 @@ button:disabled {
 .deck-card-footer {
   align-items: center;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   min-height: 30px;
   padding: 4px 5px;
 }
@@ -746,7 +810,7 @@ button:disabled {
   grid-template-columns: 54px minmax(0, 1fr) auto;
   grid-template-areas:
     "image name quantity"
-    "image meta actions";
+    "image meta quantity";
 }
 
 .deck-list-item .line-thumb {
@@ -765,11 +829,6 @@ button:disabled {
 
 .deck-list-item > small {
   grid-area: meta;
-}
-
-.deck-list-item .deck-line-actions {
-  grid-area: actions;
-  justify-content: flex-end;
 }
 
 .cardmarket-prep {

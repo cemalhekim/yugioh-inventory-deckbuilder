@@ -10,6 +10,7 @@ import type { Plugin } from 'vite'
 const defaultDeckDir = '/home/ch/Downloads/KaibaPro 2/deck'
 const repoDeckDir = path.resolve(process.cwd(), 'decks')
 const deckHistoryDir = path.join(repoDeckDir, '.history')
+const deckBranchMetaFile = '.branches.json'
 const repoStatePath = path.resolve(process.cwd(), 'data', 'inventory-backup.json')
 const cardmarketHelperPath = path.resolve(process.cwd(), 'tools', 'cardmarket-wants-helper.user.js')
 const defaultSimulatorDir = process.platform === 'win32'
@@ -194,6 +195,7 @@ function getSafeDeckVersionPath(fileName: string, versionId: string) {
 async function listDeckVersions(fileName: string) {
   const historyPath = getDeckHistoryDir(fileName)
   if (!(await pathExists(historyPath))) return []
+  const branchMeta = await readDeckBranchMeta(fileName)
 
   const entries = await fs.readdir(historyPath, { withFileTypes: true })
   const versions = await Promise.all(
@@ -211,11 +213,40 @@ async function listDeckVersions(fileName: string) {
           source: match?.[4] ?? 'unknown',
           hash: match?.[5] ?? '',
           size: stat.size,
+          branchName: branchMeta[entry.name]?.branchName ?? '',
+          parentId: branchMeta[entry.name]?.parentId ?? '',
+          note: branchMeta[entry.name]?.note ?? '',
         }
       }),
   )
 
   return versions.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+async function readDeckBranchMeta(fileName: string) {
+  const metaPath = path.join(getDeckHistoryDir(fileName), deckBranchMetaFile)
+  try {
+    return JSON.parse(await fs.readFile(metaPath, 'utf8')) as Record<
+      string,
+      { branchName?: string; parentId?: string; note?: string }
+    >
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw error
+  }
+}
+
+async function writeDeckBranchMeta(
+  fileName: string,
+  meta: Record<string, { branchName?: string; parentId?: string; note?: string }>,
+) {
+  const historyPath = getDeckHistoryDir(fileName)
+  await fs.mkdir(historyPath, { recursive: true })
+  await fs.writeFile(
+    path.join(historyPath, deckBranchMetaFile),
+    `${JSON.stringify(meta, null, 2)}\n`,
+    'utf8',
+  )
 }
 
 async function writeDeckVersion(fileName: string, content: string, source: string) {
@@ -241,6 +272,42 @@ async function writeDeckVersion(fileName: string, content: string, source: strin
   const versionPath = getSafeDeckVersionPath(fileName, versionId)
   await fs.writeFile(versionPath, content, 'utf8')
   return versionId
+}
+
+async function writeDeckBranch(
+  fileName: string,
+  content: string,
+  branchName: string,
+  parentId = '',
+) {
+  const cleanBranchName = branchName.trim()
+  if (!cleanBranchName) throw new Error('Branch name is required.')
+
+  const historyPath = getDeckHistoryDir(fileName)
+  await fs.mkdir(historyPath, { recursive: true })
+  const hash = createHash('sha256')
+    .update(`${cleanBranchName}\n${content}`)
+    .digest('hex')
+    .slice(0, 12)
+  const timestamp = new Date().toISOString().replace(/:/g, '-')
+  const versionId = `${timestamp}--branch--${hash}.ydk`
+  const versionPath = getSafeDeckVersionPath(fileName, versionId)
+  await fs.writeFile(versionPath, content, 'utf8')
+
+  const meta = await readDeckBranchMeta(fileName)
+  meta[versionId] = { branchName: cleanBranchName, parentId }
+  await writeDeckBranchMeta(fileName, meta)
+  return versionId
+}
+
+async function updateDeckVersionNote(fileName: string, versionId: string, note: string) {
+  getSafeDeckVersionPath(fileName, versionId)
+  const meta = await readDeckBranchMeta(fileName)
+  meta[versionId] = {
+    ...meta[versionId],
+    note: note.trim(),
+  }
+  await writeDeckBranchMeta(fileName, meta)
 }
 
 async function copyDeckAndRecordVersion(
@@ -462,6 +529,65 @@ function kaibaProDecksPlugin(): Plugin {
             return
           }
 
+          const versionActionMatch = decodeURIComponent(req.url ?? '').match(
+            /^\/([^/]+)\/history\/([^/]+)\/(branch|notes)$/,
+          )
+          if (versionActionMatch) {
+            await syncDeckDirectories(deckDir)
+            const [, fileName, versionId, action] = versionActionMatch
+
+            if (req.method !== 'POST') {
+              sendJson(res, 405, { error: 'Method not allowed' })
+              return
+            }
+
+            const body = JSON.parse(await readRequestBody(req)) as {
+              branchName?: string
+              note?: string
+            }
+
+            if (action === 'branch') {
+              if (typeof body.branchName !== 'string' || !body.branchName.trim()) {
+                sendJson(res, 400, { error: 'branchName is required' })
+                return
+              }
+              const content = await fs.readFile(
+                getSafeDeckVersionPath(fileName, versionId),
+                'utf8',
+              )
+              const safeFileName = getSafeDeckPath(repoDeckDir, fileName).fileName
+              const branchVersionId = await writeDeckBranch(
+                safeFileName,
+                content,
+                body.branchName,
+                versionId,
+              )
+              sendJson(res, 200, {
+                deckDir,
+                repoDeckDir,
+                fileName: safeFileName,
+                branchName: body.branchName.trim(),
+                versionId: branchVersionId,
+                versions: await listDeckVersions(safeFileName),
+              })
+              return
+            }
+
+            if (typeof body.note !== 'string') {
+              sendJson(res, 400, { error: 'note is required' })
+              return
+            }
+            const safeFileName = getSafeDeckPath(repoDeckDir, fileName).fileName
+            await updateDeckVersionNote(safeFileName, versionId, body.note)
+            sendJson(res, 200, {
+              deckDir,
+              repoDeckDir,
+              fileName: safeFileName,
+              versions: await listDeckVersions(safeFileName),
+            })
+            return
+          }
+
           const historyMatch = decodeURIComponent(req.url ?? '').match(
             /^\/([^/]+)\/history(?:\/([^/]+)\/restore)?$/,
           )
@@ -496,6 +622,36 @@ function kaibaProDecksPlugin(): Plugin {
             }
 
             sendJson(res, 405, { error: 'Method not allowed' })
+            return
+          }
+
+          const branchMatch = decodeURIComponent(req.url ?? '').match(/^\/([^/]+)\/branches$/)
+          if (branchMatch) {
+            await syncDeckDirectories(deckDir)
+            const [, requestedFileName] = branchMatch
+            const { deckPath, fileName } = getSafeDeckPath(deckDir, requestedFileName)
+
+            if (req.method !== 'POST') {
+              sendJson(res, 405, { error: 'Method not allowed' })
+              return
+            }
+
+            const body = JSON.parse(await readRequestBody(req)) as { branchName?: string }
+            if (typeof body.branchName !== 'string' || !body.branchName.trim()) {
+              sendJson(res, 400, { error: 'branchName is required' })
+              return
+            }
+
+            const content = await fs.readFile(deckPath, 'utf8')
+            const versionId = await writeDeckBranch(fileName, content, body.branchName)
+            sendJson(res, 200, {
+              deckDir,
+              repoDeckDir,
+              fileName,
+              branchName: body.branchName.trim(),
+              versionId,
+              versions: await listDeckVersions(fileName),
+            })
             return
           }
 
