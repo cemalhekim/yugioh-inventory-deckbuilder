@@ -1820,12 +1820,18 @@ function App() {
                       }
                       key={version.id}
                       onContextMenu={(event) => openVersionContextMenu(event, version)}
+                      onDoubleClick={() => void restoreDeckVersion(version.id)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') return
+                        event.preventDefault()
+                        void restoreDeckVersion(version.id)
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div
                         className="deck-history-node"
                         aria-label="Version actions"
-                        role="button"
-                        tabIndex={0}
                       />
                       <div>
                         <strong>

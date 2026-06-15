@@ -523,9 +523,14 @@ button:disabled {
 
 .deck-history-row {
   border-top: 1px solid rgba(90, 190, 255, 0.16);
-  cursor: context-menu;
+  cursor: pointer;
   height: var(--history-row-height);
   position: relative;
+}
+
+.deck-history-row:focus-visible {
+  outline: 2px solid rgba(90, 190, 255, 0.85);
+  outline-offset: -2px;
 }
 
 .deck-history-graph {
