@@ -3,7 +3,6 @@ import type { ChangeEvent, DragEvent, MouseEvent } from 'react'
 import {
   GitgraphCore,
   MergeStyle,
-  Orientation,
   TemplateName,
   templateExtend,
   toSvgPath,
@@ -615,7 +614,6 @@ function App() {
     const graph = new GitgraphCore({
       branchLabelOnEveryCommit: false,
       commitMessage: '',
-      orientation: Orientation.VerticalReverse,
       template: historyGraphTemplate,
     })
     const gitgraph = graph.getUserApi()
