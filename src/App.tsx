@@ -776,6 +776,11 @@ function App() {
   }, [refreshKaibaDecks])
 
   async function chooseKaibaDeckFolder() {
+    const confirmed = window.confirm(
+      'Simulator file pathindeki decklerin .ydk dosyalarinin bulundugu klasoru sec. OK dedikten sonra klasor secici acilacak; secimden sonra simulator deckleri repo decks klasoruyle senkronize edilecek ve deck history snapshotlari olusturulacak.',
+    )
+    if (!confirmed) return
+
     setKaibaStatus('Select your KaibaPro deck folder...')
     setIsKaibaFolderPicking(true)
     try {
@@ -1073,6 +1078,13 @@ function App() {
           </div>
           <button type="button" onClick={() => void launchYgopro()}>
             Launch YGOPRO
+          </button>
+          <button
+            type="button"
+            disabled={isKaibaFolderPicking}
+            onClick={() => void chooseKaibaDeckFolder()}
+          >
+            Synch Simulator
           </button>
         </div>
       </header>
@@ -1450,13 +1462,6 @@ function App() {
               {repoDeckDir ? <p>Repo mirror: {repoDeckDir}</p> : null}
             </div>
             <div className="kaiba-folder-actions">
-              <button
-                type="button"
-                disabled={isKaibaFolderPicking}
-                onClick={() => void chooseKaibaDeckFolder()}
-              >
-                Browse Folder
-              </button>
               <button type="button" onClick={() => void refreshKaibaDecks()}>
                 Refresh
               </button>
