@@ -202,7 +202,12 @@ async function listDeckVersions(fileName: string) {
     entries
       .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.ydk'))
       .map(async (entry) => {
-        const stat = await fs.stat(path.join(historyPath, entry.name))
+        const versionPath = path.join(historyPath, entry.name)
+        const [stat, content] = await Promise.all([
+          fs.stat(versionPath),
+          fs.readFile(versionPath, 'utf8'),
+        ])
+        const contentHash = createHash('sha256').update(content).digest('hex').slice(0, 12)
         const match = entry.name.match(
           /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2}\.\d{3}Z)--([a-z-]+)--([a-f0-9]+)\.ydk$/i,
         )
@@ -212,6 +217,7 @@ async function listDeckVersions(fileName: string) {
           createdAt: match ? `${match[1]}:${match[2]}:${match[3]}` : stat.mtime.toISOString(),
           source: match?.[4] ?? 'unknown',
           hash: match?.[5] ?? '',
+          contentHash,
           size: stat.size,
           branchName: branchMeta[entry.name]?.branchName ?? '',
           parentId: branchMeta[entry.name]?.parentId ?? '',

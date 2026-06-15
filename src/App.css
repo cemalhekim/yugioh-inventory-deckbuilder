@@ -533,6 +533,15 @@ button:disabled {
   outline-offset: -2px;
 }
 
+.deck-history-row.active-history-version {
+  background:
+    linear-gradient(90deg, rgba(57, 200, 255, 0.24), rgba(255, 232, 122, 0.08)),
+    rgba(9, 23, 43, 0.92);
+  box-shadow:
+    inset 3px 0 0 #ffe46b,
+    inset 0 0 20px rgba(57, 200, 255, 0.22);
+}
+
 .deck-history-graph {
   display: grid;
   position: relative;
@@ -555,6 +564,13 @@ button:disabled {
 
 .deck-history-lines circle {
   stroke-width: 4;
+}
+
+.deck-history-lines circle.active-history-dot {
+  filter: drop-shadow(0 0 7px rgba(255, 228, 107, 0.95))
+    drop-shadow(0 0 12px rgba(57, 200, 255, 0.72));
+  stroke: #ffe46b;
+  stroke-width: 5;
 }
 
 .deck-history-node {

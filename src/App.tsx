@@ -51,6 +51,7 @@ type DeckVersion = {
   createdAt: string
   source: string
   hash: string
+  contentHash: string
   size: number
   branchName?: string
   parentId?: string
@@ -309,6 +310,15 @@ function createYdk(deck: DeckState, deckName: string) {
   return lines.join('\n')
 }
 
+async function createContentHash(content: string) {
+  const data = new TextEncoder().encode(content)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 12)
+}
+
 function parseYdk(text: string) {
   const ids: Record<DeckZone, number[]> = { main: [], extra: [], side: [] }
   let zone: DeckZone = 'main'
@@ -441,6 +451,7 @@ function App() {
   const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
   const [isKaibaFolderPicking, setIsKaibaFolderPicking] = useState(false)
   const [deckHistory, setDeckHistory] = useState<DeckVersion[]>([])
+  const [activeDeckContentHash, setActiveDeckContentHash] = useState('')
   const [deckContextMenu, setDeckContextMenu] = useState<{
     fileName: string
     x: number
@@ -460,6 +471,30 @@ function App() {
     const state: PersistedState = { inventory, deck, deckName }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }, [inventory, deck, deckName])
+
+  useEffect(() => {
+    if (!selectedKaibaDeck) {
+      setActiveDeckContentHash('')
+      return
+    }
+
+    let canceled = false
+
+    async function updateActiveDeckHash() {
+      try {
+        const hash = await createContentHash(createYdk(deck, deckName))
+        if (!canceled) setActiveDeckContentHash(hash)
+      } catch {
+        if (!canceled) setActiveDeckContentHash('')
+      }
+    }
+
+    void updateActiveDeckHash()
+
+    return () => {
+      canceled = true
+    }
+  }, [deck, deckName, selectedKaibaDeck])
 
   useEffect(() => {
     let canceled = false
@@ -606,6 +641,13 @@ function App() {
     0,
   )
   const missingCount = missingEntries.reduce((sum, entry) => sum + entry.missing, 0)
+  const activeDeckVersionId = useMemo(
+    () =>
+      activeDeckContentHash
+        ? (deckHistory.find((version) => version.contentHash === activeDeckContentHash)?.id ?? '')
+        : '',
+    [activeDeckContentHash, deckHistory],
+  )
 
   const deckHistoryGraph = useMemo(() => {
     const branchNames = Array.from(
@@ -656,12 +698,16 @@ function App() {
         version,
       ]),
     )
-    const commits = rendered.commits.map((commit) => ({
-      color: commit.style.color ?? historyLaneColors[0],
-      hash: commit.hash,
-      x: commit.x,
-      y: commit.y,
-    }))
+    const commits = rendered.commits.map((commit) => {
+      const version = versionByHash.get(commit.hash)
+      return {
+        color: commit.style.color ?? historyLaneColors[0],
+        hash: commit.hash,
+        isActive: version?.id === activeDeckVersionId,
+        x: commit.x,
+        y: commit.y,
+      }
+    })
     const rows = [...commits]
       .sort((a, b) => a.y - b.y)
       .map((commit) => versionByHash.get(commit.hash))
@@ -683,7 +729,7 @@ function App() {
       paths,
       rows,
     }
-  }, [deckHistory])
+  }, [activeDeckVersionId, deckHistory])
 
   const filteredSets = useMemo(() => {
     const normalizedQuery = productQuery.trim().toLowerCase()
@@ -1803,53 +1849,59 @@ function App() {
                       ))}
                       {deckHistoryGraph.commits.map((commit) => (
                         <circle
+                          className={commit.isActive ? 'active-history-dot' : undefined}
                           cx={commit.x}
                           cy={commit.y}
                           fill="var(--kc-bg)"
                           key={commit.hash}
-                          r="7"
+                          r={commit.isActive ? 9 : 7}
                           stroke={commit.color}
                         />
                       ))}
                     </g>
                   </svg>
-                  {deckHistoryGraph.rows.map((version) => (
-                    <div
-                      className={
-                        version.branchName
-                          ? 'deck-history-row branch-version'
-                          : 'deck-history-row'
-                      }
-                      key={version.id}
-                      onContextMenu={(event) => openVersionContextMenu(event, version)}
-                      onDoubleClick={() => void restoreDeckVersion(version.id, false)}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter') return
-                        event.preventDefault()
-                        void restoreDeckVersion(version.id, false)
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
+                  {deckHistoryGraph.rows.map((version) => {
+                    const isActiveVersion = version.id === activeDeckVersionId
+                    return (
                       <div
-                        className="deck-history-node"
-                        aria-label="Version actions"
-                      />
-                      <div>
-                        <strong>
-                          {version.branchName
-                            ? `branch: ${version.branchName}`
-                            : version.source}
-                        </strong>
-                        <span>
-                          {version.hash || version.id}
+                        className={[
+                          'deck-history-row',
+                          version.branchName ? 'branch-version' : '',
+                          isActiveVersion ? 'active-history-version' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        key={version.id}
+                        onContextMenu={(event) => openVersionContextMenu(event, version)}
+                        onDoubleClick={() => void restoreDeckVersion(version.id, false)}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') return
+                          event.preventDefault()
+                          void restoreDeckVersion(version.id, false)
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div
+                          className="deck-history-node"
+                          aria-label="Version actions"
+                        />
+                        <div>
+                          <strong>
+                            {version.branchName
+                              ? `branch: ${version.branchName}`
+                              : version.source}
+                          </strong>
+                          <span>
+                            {version.hash || version.id}
+                          </span>
+                        </div>
+                        <span className="deck-history-note">
+                          {version.note?.trim() || new Date(version.createdAt).toLocaleString()}
                         </span>
                       </div>
-                      <span className="deck-history-note">
-                        {version.note?.trim() || new Date(version.createdAt).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="empty-state">No versions yet.</p>
