@@ -869,6 +869,11 @@ function App() {
     }
   }, [deck, deckName, refreshKaibaDecks])
 
+  function saveCurrentWorkingDeck() {
+    const target = selectedKaibaDeck || deckName || kaibaSaveName
+    void saveKaibaDeck(target)
+  }
+
   useEffect(() => {
     if (!selectedKaibaDeck) return
 
@@ -1259,6 +1264,9 @@ function App() {
                 />
                 <button type="button" onClick={() => fileInputRef.current?.click()}>
                   Import YDK
+                </button>
+                <button type="button" onClick={saveCurrentWorkingDeck}>
+                  Save Deck
                 </button>
                 <button type="button" onClick={sortCurrentDeck}>
                   Sort
