@@ -164,6 +164,7 @@ button:disabled {
   gap: 1px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 14px 32px 0;
+  z-index: 40;
 }
 
 .stats-row > div {
@@ -178,7 +179,7 @@ button:disabled {
 
 .missing-stat {
   position: relative;
-  z-index: 4;
+  z-index: 60;
 }
 
 .stats-row span {
@@ -908,10 +909,10 @@ button:disabled {
   display: none;
   min-width: min(520px, calc(100vw - 64px));
   position: absolute;
-  bottom: calc(100% + 8px);
   right: 0;
   text-transform: none;
-  z-index: 30;
+  top: calc(100% + 8px);
+  z-index: 80;
 }
 
 .missing-stat:hover .missing-dropdown,
