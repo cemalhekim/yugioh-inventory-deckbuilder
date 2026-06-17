@@ -899,6 +899,17 @@ function App() {
     setStatus('Cardmarket opened.')
   }
 
+  async function copyCardmarketHelperScript() {
+    try {
+      const response = await fetch('/cardmarket-wants-helper.user.js', { cache: 'no-store' })
+      if (!response.ok) throw new Error('Could not load helper script.')
+      await navigator.clipboard.writeText(await response.text())
+      setStatus('Helper script copied. Open Tampermonkey, create a new script, paste it, and save.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Could not copy helper script.')
+    }
+  }
+
   async function prepareCardmarketWants() {
     if (!missingEntries.length) {
       setStatus('No missing cards to send to Cardmarket.')
@@ -2067,17 +2078,28 @@ function App() {
                 />
                 <span>
                   <strong>Cardmarket helper userscript installed</strong>
-                  <small>Install or update the helper, then mark this complete.</small>
+                  <small>Chrome blocks local userscript installs. Copy the helper, paste it into Tampermonkey as a new script, save it, then mark this complete.</small>
                 </span>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault()
-                    window.open('/cardmarket-wants-helper.user.js', '_blank', 'noopener,noreferrer')
-                  }}
-                >
-                  Open Helper
-                </button>
+                <div className="dependency-step-actions">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void copyCardmarketHelperScript()
+                    }}
+                  >
+                    Copy Script
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault()
+                      window.open('https://www.tampermonkey.net/?browser=chrome', '_blank', 'noopener,noreferrer')
+                    }}
+                  >
+                    Tampermonkey
+                  </button>
+                </div>
               </label>
 
               <label>

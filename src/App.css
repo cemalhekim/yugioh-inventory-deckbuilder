@@ -1070,6 +1070,12 @@ button:disabled {
   line-height: 1.35;
 }
 
+.dependency-step-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: end;
+}
+
 .dependency-dialog-actions {
   border-top: 1px solid rgba(90, 190, 255, 0.25);
   padding-top: 14px;
@@ -1235,8 +1241,16 @@ button:disabled {
   }
 
   .dependency-checklist label button {
-    grid-column: 1 / -1;
     justify-self: stretch;
+  }
+
+  .dependency-step-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .dependency-step-actions button {
+    flex: 1;
   }
 
   .view-toggle button {
