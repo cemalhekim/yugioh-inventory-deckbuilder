@@ -79,6 +79,8 @@ type PersistedState = {
 const STORAGE_KEY = 'ygo-inventory-deckbuilder-v1'
 const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
 const SIMULATOR_APP_DIR_KEY = 'simulator-app-dir-v1'
+const CARDMARKET_HELPER_READY_KEY = 'cardmarket-helper-ready-v1'
+const CARDMARKET_LOGIN_READY_KEY = 'cardmarket-login-ready-v1'
 const maxDeckCopies = 3
 const deckZoneLimits: Record<DeckZone, number> = {
   main: 60,
@@ -474,15 +476,14 @@ function App() {
   }, [inventory, deck, deckName])
 
   useEffect(() => {
-    if (!selectedKaibaDeck) {
-      setActiveDeckContentHash('')
-      return
-    }
-
     let canceled = false
 
     async function updateActiveDeckHash() {
       try {
+        if (!selectedKaibaDeck) {
+          if (!canceled) setActiveDeckContentHash('')
+          return
+        }
         const hash = await createContentHash(createYdk(deck, deckName))
         if (!canceled) setActiveDeckContentHash(hash)
       } catch {
@@ -874,10 +875,51 @@ function App() {
     updateDeckCard(zone, card, 1)
   }
 
-  function prepareCardmarketWants() {
+  async function ensureCardmarketWantsDependencies() {
+    if (!missingEntries.length) {
+      setStatus('No missing cards to send to Cardmarket.')
+      return false
+    }
+
+    if (localStorage.getItem(CARDMARKET_HELPER_READY_KEY) !== '1') {
+      const installed = window.confirm(
+        'Dependency 1 of 2: install or update the YGO Inventory Cardmarket Wants Helper userscript. Press OK if it is already installed. Press Cancel to open the helper installer, then click Open Wants again after installing it.',
+      )
+      if (!installed) {
+        window.open('/cardmarket-wants-helper.user.js', '_blank', 'noopener,noreferrer')
+        setStatus('Install the Cardmarket helper userscript, then click Open Wants again.')
+        return false
+      }
+      localStorage.setItem(CARDMARKET_HELPER_READY_KEY, '1')
+    }
+
+    if (localStorage.getItem(CARDMARKET_LOGIN_READY_KEY) !== '1') {
+      const loggedIn = window.confirm(
+        'Dependency 2 of 2: you must already be logged into Cardmarket in this browser. Press OK if you are logged in. Press Cancel to open Cardmarket first, then click Open Wants again after logging in.',
+      )
+      if (!loggedIn) {
+        window.open(cardmarketWantsUrl, '_blank', 'noopener,noreferrer')
+        setStatus('Log into Cardmarket, then click Open Wants again.')
+        return false
+      }
+      localStorage.setItem(CARDMARKET_LOGIN_READY_KEY, '1')
+    }
+
+    try {
+      await navigator.clipboard.writeText(missingListText)
+    } catch {
+      setStatus('Clipboard permission is required before opening Cardmarket Wants.')
+      return false
+    }
+
+    return true
+  }
+
+  async function prepareCardmarketWants() {
+    if (!(await ensureCardmarketWantsDependencies())) return
+
     const listName = createTimestampedName(deckName)
     setCardmarketListName(listName)
-    void navigator.clipboard.writeText(missingListText)
     const payload = encodePayloadForUrl({
       name: listName,
       decklist: missingListText,
@@ -1049,7 +1091,7 @@ function App() {
 
   async function chooseKaibaDeckFolder() {
     const confirmed = window.confirm(
-      'Select the simulator deck directory that contains the active .ydk deck files. After you press OK, the operating system folder picker will open. Once a folder is selected, the app will scan that directory, mirror all .ydk files into this repository\'s decks/ folder, copy newer deck files in both directions based on file modification time, update the KaibaPro deck list, and create per-deck version-history snapshots under decks/.history so previous deck states can be restored later.',
+      'Select the simulator deck directory that contains the active .ydk deck files. After you press OK, the operating system folder picker will open. Once a folder is selected, the repository decks/ folder becomes the source of truth: repo decks are copied into the simulator folder, simulator-only decks are imported once, and per-deck version-history snapshots are stored under decks/.history so previous deck states can be restored later.',
     )
     if (!confirmed) return
 
@@ -1125,7 +1167,7 @@ function App() {
     }
   }
 
-  async function loadDeckHistory(fileName = selectedKaibaDeck) {
+  const loadDeckHistory = useCallback(async (fileName = selectedKaibaDeck) => {
     if (!fileName) {
       setKaibaStatus('Open a deck before loading history.')
       return
@@ -1145,7 +1187,7 @@ function App() {
     } catch (error) {
       setKaibaStatus(error instanceof Error ? error.message : 'Load history failed.')
     }
-  }
+  }, [selectedKaibaDeck])
 
   function openVersionContextMenu(event: MouseEvent<HTMLDivElement>, version: DeckVersion) {
     event.preventDefault()
@@ -1297,7 +1339,7 @@ function App() {
     }
   }
 
-  const saveKaibaDeck = useCallback(async (fileNameOrName: string, quiet = false, note = '') => {
+  async function saveKaibaDeck(fileNameOrName: string, quiet = false, note = '') {
     const target = fileNameOrName.trim()
     if (!target) {
       setKaibaStatus('Choose a KaibaPro deck or enter a save-as name.')
@@ -1330,7 +1372,7 @@ function App() {
     } catch (error) {
       setKaibaStatus(error instanceof Error ? error.message : 'Save deck failed.')
     }
-  }, [activeDeckBranchName, activeDeckVersionId, deck, deckName, refreshKaibaDecks])
+  }
 
   function saveCurrentWorkingDeck() {
     const target = selectedKaibaDeck || deckName
@@ -1484,7 +1526,7 @@ function App() {
               </label>
               <button
                 type="button"
-                onClick={prepareCardmarketWants}
+                onClick={() => void prepareCardmarketWants()}
                 disabled={!missingEntries.length}
               >
                 Open Wants

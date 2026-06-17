@@ -385,7 +385,7 @@ async function syncDeckDirectories(kaibaDeckDir: string) {
     const repoExists = await pathExists(repoPath)
 
     if (kaibaExists && !repoExists) {
-      await copyDeckAndRecordVersion(fileName, kaibaPath, repoPath, 'kaibapro-sync')
+      await copyDeckAndRecordVersion(fileName, kaibaPath, repoPath, 'simulator-import')
       copiedToRepo += 1
       continue
     }
@@ -398,21 +398,16 @@ async function syncDeckDirectories(kaibaDeckDir: string) {
 
     if (!kaibaExists || !repoExists) continue
 
-    const [kaibaStat, repoStat] = await Promise.all([
-      fs.stat(kaibaPath),
-      fs.stat(repoPath),
+    const [kaibaContent, repoContent] = await Promise.all([
+      fs.readFile(kaibaPath, 'utf8'),
+      fs.readFile(repoPath, 'utf8'),
     ])
-    const mtimeDelta = kaibaStat.mtimeMs - repoStat.mtimeMs
 
-    if (mtimeDelta > 1000) {
-      await copyDeckAndRecordVersion(fileName, kaibaPath, repoPath, 'kaibapro-sync')
-      copiedToRepo += 1
-    } else if (mtimeDelta < -1000) {
+    if (kaibaContent !== repoContent) {
       await copyDeckAndRecordVersion(fileName, repoPath, kaibaPath, 'repo-sync')
       copiedToKaiba += 1
     } else {
-      const content = await fs.readFile(repoPath, 'utf8')
-      await writeDeckVersion(fileName, content, 'baseline')
+      await writeDeckVersion(fileName, repoContent, 'baseline')
     }
   }
 

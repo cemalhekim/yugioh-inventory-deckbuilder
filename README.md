@@ -56,6 +56,12 @@ Use the KaibaPro Sync panel to:
 - save the current app deck back to the selected simulator deck,
 - save the current deck as a new simulator `.ydk`.
 
+The repository `decks/` folder is the source of truth during sync. Existing
+repository decks are copied out to the selected simulator deck folder whenever
+the files differ, so every device that pulls this repository gets the current
+deck files. Simulator-only decks are imported into `decks/` only when the
+repository does not already have that deck.
+
 After a KaibaPro deck is selected, app deck changes are automatically synced
 back to that selected `.ydk`.
 
