@@ -467,6 +467,7 @@ function App() {
   const [isCardmarketDependencyDialogOpen, setIsCardmarketDependencyDialogOpen] = useState(false)
   const [isCardmarketHelperReady, setIsCardmarketHelperReady] = useState(false)
   const [isCardmarketLoginReady, setIsCardmarketLoginReady] = useState(false)
+  const [cardmarketHelperScript, setCardmarketHelperScript] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
   const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
@@ -903,10 +904,16 @@ function App() {
     try {
       const response = await fetch('/cardmarket-wants-helper.user.js', { cache: 'no-store' })
       if (!response.ok) throw new Error('Could not load helper script.')
-      await navigator.clipboard.writeText(await response.text())
-      setStatus('Helper script copied. Open Tampermonkey, create a new script, paste it, and save.')
+      const helperScript = await response.text()
+      setCardmarketHelperScript(helperScript)
+      try {
+        await navigator.clipboard.writeText(helperScript)
+        setStatus('Helper script copied. Open Tampermonkey, create a new script, paste it, and save.')
+      } catch {
+        setStatus('Clipboard was blocked. Select and copy the helper script from the text box.')
+      }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Could not copy helper script.')
+      setStatus(error instanceof Error ? error.message : 'Could not load helper script.')
     }
   }
 
@@ -2101,6 +2108,32 @@ function App() {
                   </button>
                 </div>
               </label>
+
+              {cardmarketHelperScript ? (
+                <div className="dependency-script-box">
+                  <div className="dependency-script-heading">
+                    <strong>Helper script</strong>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const scriptArea = document.getElementById(
+                          'cardmarket-helper-script',
+                        ) as HTMLTextAreaElement | null
+                        scriptArea?.focus()
+                        scriptArea?.select()
+                      }}
+                    >
+                      Select All
+                    </button>
+                  </div>
+                  <textarea
+                    id="cardmarket-helper-script"
+                    readOnly
+                    spellCheck={false}
+                    value={cardmarketHelperScript}
+                  />
+                </div>
+              ) : null}
 
               <label>
                 <input

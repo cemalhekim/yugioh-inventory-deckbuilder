@@ -1076,6 +1076,35 @@ button:disabled {
   justify-content: end;
 }
 
+.dependency-script-box {
+  background: rgba(3, 10, 20, 0.72);
+  border: 1px solid rgba(90, 190, 255, 0.25);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.dependency-script-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.dependency-script-heading strong {
+  color: var(--kc-ice);
+}
+
+.dependency-script-box textarea {
+  background: rgba(1, 5, 12, 0.9);
+  border: 1px solid var(--kc-line);
+  color: var(--kc-text);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-height: 180px;
+  resize: vertical;
+  width: 100%;
+}
+
 .dependency-dialog-actions {
   border-top: 1px solid rgba(90, 190, 255, 0.25);
   padding-top: 14px;
