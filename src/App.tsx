@@ -79,8 +79,6 @@ type PersistedState = {
 const STORAGE_KEY = 'ygo-inventory-deckbuilder-v1'
 const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
 const SIMULATOR_APP_DIR_KEY = 'simulator-app-dir-v1'
-const CARDMARKET_HELPER_READY_KEY = 'cardmarket-helper-ready-v1'
-const CARDMARKET_LOGIN_READY_KEY = 'cardmarket-login-ready-v1'
 const maxDeckCopies = 3
 const deckZoneLimits: Record<DeckZone, number> = {
   main: 60,
@@ -467,12 +465,8 @@ function App() {
   } | null>(null)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const [isCardmarketDependencyDialogOpen, setIsCardmarketDependencyDialogOpen] = useState(false)
-  const [isCardmarketHelperReady, setIsCardmarketHelperReady] = useState(
-    () => localStorage.getItem(CARDMARKET_HELPER_READY_KEY) === '1',
-  )
-  const [isCardmarketLoginReady, setIsCardmarketLoginReady] = useState(
-    () => localStorage.getItem(CARDMARKET_LOGIN_READY_KEY) === '1',
-  )
+  const [isCardmarketHelperReady, setIsCardmarketHelperReady] = useState(false)
+  const [isCardmarketLoginReady, setIsCardmarketLoginReady] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
   const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
@@ -922,15 +916,13 @@ function App() {
 
   function closeCardmarketDependencyDialog() {
     setIsCardmarketDependencyDialogOpen(false)
-    setIsCardmarketHelperReady(localStorage.getItem(CARDMARKET_HELPER_READY_KEY) === '1')
-    setIsCardmarketLoginReady(localStorage.getItem(CARDMARKET_LOGIN_READY_KEY) === '1')
+    setIsCardmarketHelperReady(false)
+    setIsCardmarketLoginReady(false)
   }
 
   async function continueCardmarketWantsAfterDependencies() {
     if (!isCardmarketHelperReady || !isCardmarketLoginReady) return
 
-    localStorage.setItem(CARDMARKET_HELPER_READY_KEY, '1')
-    localStorage.setItem(CARDMARKET_LOGIN_READY_KEY, '1')
     setIsCardmarketDependencyDialogOpen(false)
     await openCardmarketWants()
   }
