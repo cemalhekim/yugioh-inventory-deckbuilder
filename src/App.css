@@ -1002,6 +1002,79 @@ button:disabled {
   width: 100%;
 }
 
+.dependency-dialog {
+  background: linear-gradient(145deg, rgba(8, 20, 38, 0.98), rgba(13, 38, 70, 0.98));
+  border: 1px solid var(--kc-line-strong);
+  border-radius: 8px;
+  box-shadow: 0 0 42px rgba(57, 200, 255, 0.34);
+  display: grid;
+  gap: 16px;
+  max-width: min(680px, calc(100vw - 48px));
+  padding: 18px;
+  width: 100%;
+}
+
+.dependency-dialog-heading,
+.dependency-dialog-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.dependency-dialog h2 {
+  color: var(--kc-ice);
+  font-size: 24px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.dependency-dialog p {
+  color: var(--kc-muted);
+  margin: 4px 0 0;
+}
+
+.dependency-checklist {
+  display: grid;
+  gap: 10px;
+}
+
+.dependency-checklist label {
+  align-items: center;
+  background: rgba(3, 10, 20, 0.58);
+  border: 1px solid rgba(90, 190, 255, 0.25);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.dependency-checklist input {
+  height: 18px;
+  width: 18px;
+}
+
+.dependency-checklist span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dependency-checklist strong {
+  color: var(--kc-ice);
+  overflow-wrap: anywhere;
+}
+
+.dependency-checklist small {
+  color: var(--kc-muted);
+  line-height: 1.35;
+}
+
+.dependency-dialog-actions {
+  border-top: 1px solid rgba(90, 190, 255, 0.25);
+  padding-top: 14px;
+}
+
 .card-preview-art {
   align-items: center;
   aspect-ratio: 1 / 1;
@@ -1149,6 +1222,21 @@ button:disabled {
 
   .deck-tools {
     align-items: stretch;
+  }
+
+  .dependency-dialog-heading,
+  .dependency-dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dependency-checklist label {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .dependency-checklist label button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
   }
 
   .view-toggle button {

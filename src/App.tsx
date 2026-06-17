@@ -466,6 +466,13 @@ function App() {
     y: number
   } | null>(null)
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
+  const [isCardmarketDependencyDialogOpen, setIsCardmarketDependencyDialogOpen] = useState(false)
+  const [isCardmarketHelperReady, setIsCardmarketHelperReady] = useState(
+    () => localStorage.getItem(CARDMARKET_HELPER_READY_KEY) === '1',
+  )
+  const [isCardmarketLoginReady, setIsCardmarketLoginReady] = useState(
+    () => localStorage.getItem(CARDMARKET_LOGIN_READY_KEY) === '1',
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
   const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
@@ -875,48 +882,13 @@ function App() {
     updateDeckCard(zone, card, 1)
   }
 
-  async function ensureCardmarketWantsDependencies() {
-    if (!missingEntries.length) {
-      setStatus('No missing cards to send to Cardmarket.')
-      return false
-    }
-
-    if (localStorage.getItem(CARDMARKET_HELPER_READY_KEY) !== '1') {
-      const installed = window.confirm(
-        'Dependency 1 of 2: install or update the YGO Inventory Cardmarket Wants Helper userscript. Press OK if it is already installed. Press Cancel to open the helper installer, then click Open Wants again after installing it.',
-      )
-      if (!installed) {
-        window.open('/cardmarket-wants-helper.user.js', '_blank', 'noopener,noreferrer')
-        setStatus('Install the Cardmarket helper userscript, then click Open Wants again.')
-        return false
-      }
-      localStorage.setItem(CARDMARKET_HELPER_READY_KEY, '1')
-    }
-
-    if (localStorage.getItem(CARDMARKET_LOGIN_READY_KEY) !== '1') {
-      const loggedIn = window.confirm(
-        'Dependency 2 of 2: you must already be logged into Cardmarket in this browser. Press OK if you are logged in. Press Cancel to open Cardmarket first, then click Open Wants again after logging in.',
-      )
-      if (!loggedIn) {
-        window.open(cardmarketWantsUrl, '_blank', 'noopener,noreferrer')
-        setStatus('Log into Cardmarket, then click Open Wants again.')
-        return false
-      }
-      localStorage.setItem(CARDMARKET_LOGIN_READY_KEY, '1')
-    }
-
+  async function openCardmarketWants() {
     try {
       await navigator.clipboard.writeText(missingListText)
     } catch {
       setStatus('Clipboard permission is required before opening Cardmarket Wants.')
-      return false
+      return
     }
-
-    return true
-  }
-
-  async function prepareCardmarketWants() {
-    if (!(await ensureCardmarketWantsDependencies())) return
 
     const listName = createTimestampedName(deckName)
     setCardmarketListName(listName)
@@ -931,6 +903,36 @@ function App() {
       'noopener,noreferrer',
     )
     setStatus('Cardmarket opened.')
+  }
+
+  async function prepareCardmarketWants() {
+    if (!missingEntries.length) {
+      setStatus('No missing cards to send to Cardmarket.')
+      return
+    }
+
+    if (!isCardmarketHelperReady || !isCardmarketLoginReady) {
+      setIsCardmarketDependencyDialogOpen(true)
+      setStatus('Complete the Cardmarket dependencies before opening Wants.')
+      return
+    }
+
+    await openCardmarketWants()
+  }
+
+  function closeCardmarketDependencyDialog() {
+    setIsCardmarketDependencyDialogOpen(false)
+    setIsCardmarketHelperReady(localStorage.getItem(CARDMARKET_HELPER_READY_KEY) === '1')
+    setIsCardmarketLoginReady(localStorage.getItem(CARDMARKET_LOGIN_READY_KEY) === '1')
+  }
+
+  async function continueCardmarketWantsAfterDependencies() {
+    if (!isCardmarketHelperReady || !isCardmarketLoginReady) return
+
+    localStorage.setItem(CARDMARKET_HELPER_READY_KEY, '1')
+    localStorage.setItem(CARDMARKET_LOGIN_READY_KEY, '1')
+    setIsCardmarketDependencyDialogOpen(false)
+    await openCardmarketWants()
   }
 
   async function selectSimulatorAppFolder() {
@@ -2038,6 +2040,94 @@ function App() {
         </section>
 
       </section>
+
+      {isCardmarketDependencyDialogOpen ? (
+        <div
+          className="card-preview-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cardmarket-dependency-title"
+          onClick={closeCardmarketDependencyDialog}
+        >
+          <div
+            className="dependency-dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="dependency-dialog-heading">
+              <div>
+                <h2 id="cardmarket-dependency-title">Cardmarket Dependencies</h2>
+                <p>Complete these before opening Wants.</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCardmarketDependencyDialog}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="dependency-checklist">
+              <label>
+                <input
+                  checked={isCardmarketHelperReady}
+                  onChange={(event) => setIsCardmarketHelperReady(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Cardmarket helper userscript installed</strong>
+                  <small>Install or update the helper, then mark this complete.</small>
+                </span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    window.open('/cardmarket-wants-helper.user.js', '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  Open Helper
+                </button>
+              </label>
+
+              <label>
+                <input
+                  checked={isCardmarketLoginReady}
+                  onChange={(event) => setIsCardmarketLoginReady(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Logged into Cardmarket</strong>
+                  <small>Use your normal browser session. The app never asks for your password.</small>
+                </span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    window.open(cardmarketWantsUrl, '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  Open Login
+                </button>
+              </label>
+            </div>
+
+            <div className="dependency-dialog-actions">
+              <button
+                type="button"
+                onClick={closeCardmarketDependencyDialog}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!isCardmarketHelperReady || !isCardmarketLoginReady}
+                onClick={() => void continueCardmarketWantsAfterDependencies()}
+              >
+                Continue to Wants
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {previewCard ? (
         <div
