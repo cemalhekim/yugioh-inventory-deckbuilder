@@ -908,9 +908,9 @@ button:disabled {
   display: none;
   min-width: min(520px, calc(100vw - 64px));
   position: absolute;
+  bottom: calc(100% + 8px);
   right: 0;
   text-transform: none;
-  top: calc(100% + 8px);
   z-index: 30;
 }
 
