@@ -878,11 +878,11 @@ function App() {
   }
 
   async function openCardmarketWants() {
+    let copiedToClipboard = true
     try {
       await navigator.clipboard.writeText(missingListText)
     } catch {
-      setStatus('Clipboard permission is required before opening Cardmarket Wants.')
-      return
+      copiedToClipboard = false
     }
 
     const listName = createTimestampedName(deckName)
@@ -897,7 +897,11 @@ function App() {
       '_blank',
       'noopener,noreferrer',
     )
-    setStatus('Cardmarket opened.')
+    setStatus(
+      copiedToClipboard
+        ? 'Cardmarket opened.'
+        : 'Cardmarket opened with URL payload. Clipboard copy was blocked.',
+    )
   }
 
   async function copyCardmarketHelperScript() {
@@ -2066,7 +2070,7 @@ function App() {
             <div className="dependency-dialog-heading">
               <div>
                 <h2 id="cardmarket-dependency-title">Cardmarket Dependencies</h2>
-                <p>Complete these before opening Wants.</p>
+                <p>Complete these, then Continue opens Cardmarket with the auto-fill payload.</p>
               </div>
               <button
                 type="button"
