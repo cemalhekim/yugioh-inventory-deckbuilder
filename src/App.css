@@ -661,6 +661,46 @@ button:disabled {
   cursor: grab;
 }
 
+.card-drag-preview {
+  align-items: center;
+  background: rgba(5, 12, 25, 0.95);
+  border: 1px solid rgba(118, 221, 255, 0.72);
+  border-radius: 6px;
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.42),
+    0 0 20px rgba(57, 200, 255, 0.35);
+  color: var(--kc-ice);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  left: -240px;
+  padding: 8px;
+  pointer-events: none;
+  position: fixed;
+  top: -320px;
+  width: 112px;
+  z-index: 9999;
+}
+
+.card-drag-preview img {
+  aspect-ratio: 0.68;
+  border: 1px solid rgba(246, 251, 255, 0.34);
+  border-radius: 4px;
+  display: block;
+  object-fit: cover;
+  width: 88px;
+}
+
+.card-drag-preview span {
+  font-size: 10px;
+  line-height: 1.2;
+  max-width: 96px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .card-result strong,
 .line-item strong {
   color: var(--kc-ice);

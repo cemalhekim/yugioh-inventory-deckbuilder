@@ -466,6 +466,7 @@ function App() {
   const [cardmarketListName, setCardmarketListName] = useState(createTimestampedName)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
+  const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const state: PersistedState = { inventory, deck, deckName }
@@ -797,9 +798,35 @@ function App() {
     addCardToZone(card, 'side')
   }
 
+  function clearCardDragPreview() {
+    cardDragPreviewRef.current?.remove()
+    cardDragPreviewRef.current = null
+  }
+
   function handleSearchCardDragStart(event: DragEvent<HTMLImageElement>, card: YgoCard) {
     event.dataTransfer.effectAllowed = 'copy'
     event.dataTransfer.setData(cardDragDataType, JSON.stringify(card))
+
+    clearCardDragPreview()
+
+    const preview = document.createElement('div')
+    const previewImage = document.createElement('img')
+    const previewName = document.createElement('span')
+    preview.className = 'card-drag-preview'
+    previewImage.src =
+      card.card_images?.[0]?.image_url_small ??
+      card.card_images?.[0]?.image_url ??
+      ''
+    previewImage.alt = ''
+    previewName.textContent = card.name
+    preview.append(previewImage, previewName)
+    document.body.append(preview)
+    cardDragPreviewRef.current = preview
+    event.dataTransfer.setDragImage(preview, 56, 78)
+  }
+
+  function handleSearchCardDragEnd() {
+    clearCardDragPreview()
   }
 
   function handleDeckZoneDragOver(event: DragEvent<HTMLDivElement>) {
@@ -814,6 +841,7 @@ function App() {
     if (!rawCard) return
 
     event.preventDefault()
+    clearCardDragPreview()
     try {
       addCardToZone(JSON.parse(rawCard) as YgoCard, zone)
     } catch {
@@ -1518,6 +1546,7 @@ function App() {
                       draggable
                       title="Drag to Main, Extra, or Side Deck."
                       onDragStart={(event) => handleSearchCardDragStart(event, card)}
+                      onDragEnd={handleSearchCardDragEnd}
                       onClick={() => setPreviewCard(card)}
                     />
                     <div className="clickable-card-text" onClick={() => setPreviewCard(card)}>
