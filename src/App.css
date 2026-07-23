@@ -61,7 +61,15 @@
 .stats-row,
 .workspace-grid {
   position: relative;
+}
+
+.topbar,
+.workspace-grid {
   z-index: 1;
+}
+
+.stats-row {
+  z-index: 10;
 }
 
 .topbar {
