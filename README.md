@@ -38,7 +38,7 @@ npm run dev
 ## Hosted (home server)
 
 The same app runs as a container on the home server and is reached at
-`https://asuspro-homeserver.tail95ac85.ts.net:10443` over Tailscale. In that
+`https://asuspro-homeserver.tail95ac85.ts.net:11443` over Tailscale. In that
 mode `server/index.ts` serves the built `dist/` and the API from `server/api.ts`
 against a single data directory (`/data`, bind-mounted from `/srv/data/ygo`):
 
