@@ -2011,9 +2011,19 @@ function App() {
                   <span>{inventoryById.get(card.id) ?? 0}x</span>
                   <strong onClick={() => setPreviewCard(card)}>{card.name}</strong>
                   <small>{card.type}</small>
-                  <button type="button" onClick={() => addToInventory(card)}>
-                    +
-                  </button>
+                  <div className="row-actions set-card-actions">
+                    <button
+                      type="button"
+                      title="Remove one from inventory"
+                      disabled={!(inventoryById.get(card.id) ?? 0)}
+                      onClick={() => addToInventory(card, -1)}
+                    >
+                      −
+                    </button>
+                    <button type="button" title="Add one to inventory" onClick={() => addToInventory(card)}>
+                      +
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

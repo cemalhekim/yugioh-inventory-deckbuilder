@@ -1158,8 +1158,18 @@ button:disabled {
 }
 
 .set-card-item {
-  grid-template-columns: 86px 42px minmax(0, 1fr) auto 36px;
+  grid-template-columns: 86px 42px minmax(0, 1fr) auto auto;
   min-height: 120px;
+}
+
+.set-card-actions button {
+  width: 32px;
+}
+
+.set-card-actions button:last-child {
+  background: linear-gradient(180deg, rgba(57, 200, 255, 0.95), rgba(20, 91, 210, 0.95));
+  border-color: rgba(199, 241, 255, 0.9);
+  color: #03101d;
 }
 
 .set-card-item .line-thumb {
