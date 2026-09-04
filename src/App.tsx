@@ -360,6 +360,59 @@ async function fetchCardsByIds(ids: number[]) {
   return new Map(cards.map((card) => [card.id, card]))
 }
 
+// A pasted deck list: .ydk id lines and/or name lines such as "3x Blue-Eyes
+// White Dragon", "3 Blue-Eyes White Dragon", "Blue-Eyes White Dragon x3" or a
+// bare name (one copy). Returns copies per id and per name.
+function parseDeckListText(text: string) {
+  const ids = new Map<number, number>()
+  const names = new Map<string, number>()
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#') || line.startsWith('!')) continue
+    if (/^\d+$/.test(line)) {
+      const id = Number(line)
+      ids.set(id, (ids.get(id) ?? 0) + 1)
+      continue
+    }
+    let copies = 1
+    let name = line
+    const leading = line.match(/^(\d+)\s*[xX×]?\s+(.+)$/)
+    const trailing = line.match(/^(.+?)\s+[xX×]\s*(\d+)$/)
+    if (leading) {
+      copies = Number(leading[1])
+      name = leading[2]
+    } else if (trailing) {
+      copies = Number(trailing[2])
+      name = trailing[1]
+    }
+    name = name.trim()
+    if (!name || !Number.isFinite(copies) || copies < 1) continue
+    names.set(name, (names.get(name) ?? 0) + copies)
+  }
+  return { ids, names }
+}
+
+async function fetchCardsByNames(names: string[]) {
+  const found = new Map<string, YgoCard>()
+  const missing: string[] = []
+  await Promise.all(
+    names.map(async (name) => {
+      const response = await fetch(
+        `https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}`,
+      )
+      if (!response.ok) {
+        missing.push(name)
+        return
+      }
+      const payload = (await response.json()) as { data?: YgoCard[] }
+      const card = payload.data?.[0]
+      if (card) found.set(name, card)
+      else missing.push(name)
+    }),
+  )
+  return { found, missing }
+}
+
 function getSetKind(setName: string) {
   const name = setName.toLowerCase()
   if (name.includes('structure deck')) return 'Structure'
@@ -458,6 +511,9 @@ function App() {
   // the initial load finished, so a stale browser copy never overwrites it.
   const lastSyncedStateRef = useRef<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [isDeckListDialogOpen, setIsDeckListDialogOpen] = useState(false)
+  const [deckListText, setDeckListText] = useState('')
+  const [isDeckListImporting, setIsDeckListImporting] = useState(false)
   const viewport = useAppScale()
   const appScale = viewport.scale
   useScrollLock()
@@ -1409,34 +1465,63 @@ function App() {
     setDeckContextMenu({ fileName, ...toShellPoint(event.clientX, event.clientY) })
   }
 
-  // Add every card of a .ydk (main, extra and side) to the inventory, one
-  // copy per listed line, so a physical deck can be inventoried in one go.
-  async function importDeckListToInventory(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
+  // Add every card of a pasted deck list to the inventory: .ydk id lines
+  // (main, extra and side, one copy per line) and/or "3x Name" lines.
+  async function importDeckListToInventory() {
+    const { ids, names } = parseDeckListText(deckListText)
+    if (!ids.size && !names.size) {
+      setStatus('Paste a deck list first: .ydk ids or lines like "3x Card Name".')
+      return
+    }
 
-    setStatus(`Adding ${file.name} to inventory...`)
+    setIsDeckListImporting(true)
+    setStatus('Looking up cards...')
     try {
-      const parsed = parseYdk(await file.text())
-      const allIds = [...parsed.main, ...parsed.extra, ...parsed.side]
-      const copiesById = new Map<number, number>()
-      for (const id of allIds) copiesById.set(id, (copiesById.get(id) ?? 0) + 1)
-      const cardsById = await fetchCardsByIds(allIds)
+      const [cardsById, byName] = await Promise.all([
+        fetchCardsByIds(Array.from(ids.keys())),
+        fetchCardsByNames(Array.from(names.keys())),
+      ])
+      const copiesByCard = new Map<number, { card: YgoCard; copies: number }>()
+      const bump = (card: YgoCard, copies: number) => {
+        const current = copiesByCard.get(card.id)
+        copiesByCard.set(card.id, { card, copies: (current?.copies ?? 0) + copies })
+      }
+      for (const [id, copies] of ids) {
+        const card = cardsById.get(id)
+        if (card) bump(card, copies)
+      }
+      for (const [name, copies] of names) {
+        const card = byName.found.get(name)
+        if (card) bump(card, copies)
+      }
 
       setInventory((current) => {
         let next = current
-        for (const [id, copies] of copiesById) {
-          const card = cardsById.get(id)
-          if (card) next = upsertEntry(next, card, copies)
+        for (const { card, copies } of copiesByCard.values()) {
+          next = upsertEntry(next, card, copies)
         }
         return next.sort((a, b) => a.card.name.localeCompare(b.card.name))
       })
-      setStatus(`Added ${allIds.length} cards (${copiesById.size} different) from ${file.name} to inventory.`)
+
+      const total = Array.from(copiesByCard.values()).reduce((sum, e) => sum + e.copies, 0)
+      const missingNote = byName.missing.length
+        ? ` Not found: ${byName.missing.join(', ')}.`
+        : ''
+      setStatus(`Added ${total} cards (${copiesByCard.size} different) to inventory.${missingNote}`)
+      setIsDeckListDialogOpen(false)
+      setDeckListText('')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Deck list import failed.')
     } finally {
-      event.target.value = ''
+      setIsDeckListImporting(false)
     }
+  }
+
+  async function loadDeckListFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setDeckListText(await file.text())
+    event.target.value = ''
   }
 
   async function importYdk(event: ChangeEvent<HTMLInputElement>) {
@@ -1660,15 +1745,13 @@ function App() {
                 ? ` · autosaved ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                 : ''}
             </span>
-            <label className="file-button" title="Add every card of a .ydk deck list to your inventory">
+            <button
+              type="button"
+              title="Paste a deck list and add every card to your inventory"
+              onClick={() => setIsDeckListDialogOpen(true)}
+            >
               Import deck list
-              <input
-                type="file"
-                accept=".ydk,text/plain"
-                onChange={importDeckListToInventory}
-                hidden
-              />
-            </label>
+            </button>
           </div>
         </section>
 
@@ -2033,6 +2116,59 @@ function App() {
         </section>
 
       </section>
+
+      {isDeckListDialogOpen ? (
+        <div
+          className="card-preview-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="deck-list-dialog-title"
+          onClick={() => (isDeckListImporting ? null : setIsDeckListDialogOpen(false))}
+        >
+          <div className="dependency-dialog deck-list-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="dependency-dialog-heading">
+              <div>
+                <h2 id="deck-list-dialog-title">Import deck list to inventory</h2>
+                <p>
+                  Paste .ydk contents (card ids) or one card per line like
+                  &quot;3x Blue-Eyes White Dragon&quot;. Every copy is added to your inventory.
+                </p>
+              </div>
+              <label className="file-button">
+                Load .ydk
+                <input type="file" accept=".ydk,text/plain" onChange={(e) => void loadDeckListFile(e)} hidden />
+              </label>
+            </div>
+            <textarea
+              className="deck-list-input"
+              value={deckListText}
+              onChange={(event) => setDeckListText(event.target.value)}
+              placeholder={'3x Blue-Eyes White Dragon\n1 Maiden with Eyes of Blue\n89631139'}
+              autoFocus
+              spellCheck={false}
+            />
+            <div className="dependency-dialog-actions">
+              <span className="muted">{status}</span>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  disabled={isDeckListImporting}
+                  onClick={() => setIsDeckListDialogOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeckListImporting || !deckListText.trim()}
+                  onClick={() => void importDeckListToInventory()}
+                >
+                  {isDeckListImporting ? 'Adding...' : 'Add to inventory'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isCardmarketDependencyDialogOpen ? (
         <div

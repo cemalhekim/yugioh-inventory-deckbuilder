@@ -1187,6 +1187,27 @@ button:disabled {
   width: 100%;
 }
 
+.deck-list-input {
+  background: rgba(1, 5, 12, 0.9);
+  border: 1px solid var(--kc-line);
+  border-radius: 4px;
+  color: var(--kc-text);
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-height: 260px;
+  outline: none;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.deck-list-input:focus {
+  border-color: var(--kc-line-strong);
+}
+
+.deck-list-dialog .muted {
+  padding: 0;
+}
+
 .dependency-dialog-heading,
 .dependency-dialog-actions {
   align-items: center;
