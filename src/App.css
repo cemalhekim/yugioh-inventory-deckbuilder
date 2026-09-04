@@ -635,8 +635,8 @@ button:disabled {
   align-content: start;
   display: grid;
   gap: 6px;
-  /* Same ~60px card as the deck zones, however wide the panel is. */
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  /* Same ~80px card as the deck zones, however wide the panel is. */
+  grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
   padding: 8px;
 }
 

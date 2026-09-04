@@ -93,8 +93,10 @@ const zoneLabels: Record<DeckZone, string> = {
 }
 
 const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
-// Same small card everywhere: never wider than this, whatever the monitor.
-const deckCardMaxWidth = 62
+// Static card size everywhere (~80px on screen, what the 15-column layout gave
+// on a 1440p monitor); the GUI adapts around it. FitGrid still shrinks cards
+// when a zone would otherwise overflow on a small window.
+const deckCardMaxWidth = 82
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 const cardmarketPayloadHashKey = 'ygo-inventory-wants'
 const cardDragDataType = 'application/ygo-card'
