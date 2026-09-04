@@ -1203,7 +1203,10 @@ function App() {
     const inDeck = deckTotals.get(card.id)?.quantity ?? 0
     // Counts and greying only matter in inventory-only mode; otherwise every
     // card is freely usable up to the normal 3-copy rule.
-    const exhausted = inventoryOnly && owned > 0 && inDeck >= owned
+    // Nothing more of this card can go into the deck: every owned copy is in
+    // it, or it already sits at the 3-copy limit.
+    const exhausted =
+      inventoryOnly && ((owned > 0 && inDeck >= owned) || inDeck >= maxDeckCopies)
     return (
       <article className={exhausted ? 'card-tile exhausted' : 'card-tile'} key={card.id}>
         <img
