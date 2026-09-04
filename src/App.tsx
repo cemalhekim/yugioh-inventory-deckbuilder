@@ -7,7 +7,6 @@ import { useAppScale, useScrollLock } from './useViewport.ts'
 type DeckZone = 'main' | 'extra' | 'side'
 type DeckViewMode = 'list' | 'cards'
 type AppPage = 'deck' | 'products'
-type SearchPanelView = 'search' | 'inventory'
 
 type YgoCard = {
   id: number
@@ -399,7 +398,6 @@ function App() {
   const [deckName, setDeckName] = useState(initialState.deckName)
   const [appPage, setAppPage] = useState<AppPage>('deck')
   const [deckViewMode, setDeckViewMode] = useState<DeckViewMode>('cards')
-  const [searchPanelView, setSearchPanelView] = useState<SearchPanelView>('search')
   const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
@@ -1556,72 +1554,61 @@ function App() {
         <section className="panel search-panel" hidden={appPage !== 'deck'}>
           <div className="panel-heading">
             <div>
-              <h2>{searchPanelView === 'search' ? 'Card Search' : 'Inventory'}</h2>
+              <h2>Card Search</h2>
               <p>{status}</p>
             </div>
-            <div className="view-toggle" aria-label="Search panel view">
-              <button
-                className={searchPanelView === 'search' ? 'active' : ''}
-                type="button"
-                onClick={() => setSearchPanelView('search')}
-              >
-                Search
+            <button
+              type="button"
+              className={inventoryOnly ? 'inventory-toggle active' : 'inventory-toggle'}
+              aria-label="Inventory only"
+              aria-pressed={inventoryOnly}
+              title={inventoryOnly ? 'Inventory only: on' : 'Inventory only: off'}
+              onClick={toggleInventoryOnly}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20">
+                <path
+                  d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M3 7.5 12 12l9-4.5M12 12v9"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </button>
+          </div>
+          <input
+            className="search-input"
+            value={query}
+            onChange={(event) => updateQuery(event.target.value)}
+            placeholder={inventoryOnly ? 'Filter your inventory' : 'Search by card name'}
+          />
+          <div className="card-tile-grid" data-scroll>
+            {isSearching ? <p className="muted">Searching...</p> : null}
+            {!isSearching && inventoryOnly && !visibleResults.length ? (
+              <p className="empty-state">No owned cards match.</p>
+            ) : null}
+            {visibleResults.map((card) => renderCardTile(card))}
+          </div>
+          <div className="panel-footer">
+            <span>{visibleResults.length} cards</span>
+            <div className="row-actions">
+              <button type="button" onClick={() => void saveRepoBackup()}>
+                Save
               </button>
-              <button
-                className={searchPanelView === 'inventory' ? 'active' : ''}
-                type="button"
-                onClick={() => setSearchPanelView('inventory')}
-              >
-                Inventory
-              </button>
+              <button type="button" onClick={exportBackup}>Backup</button>
+              <label className="file-button">
+                Restore
+                <input type="file" accept="application/json" onChange={importBackup} hidden />
+              </label>
             </div>
           </div>
-          {searchPanelView === 'search' ? (
-            <>
-              <input
-                className="search-input"
-                value={query}
-                onChange={(event) => updateQuery(event.target.value)}
-                placeholder="Search by card name"
-              />
-              <div className="search-tools">
-                <button
-                  type="button"
-                  className={inventoryOnly ? 'active' : ''}
-                  onClick={toggleInventoryOnly}
-                >
-                  {inventoryOnly ? 'Inventory only: on' : 'Inventory only'}
-                </button>
-                <span>{visibleResults.length} cards</span>
-              </div>
-              <div className="card-tile-grid" data-scroll>
-                {isSearching ? <p className="muted">Searching...</p> : null}
-                {visibleResults.map((card) => renderCardTile(card))}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="inventory-tools">
-                <button type="button" onClick={() => void saveRepoBackup()}>
-                  Save Repo
-                </button>
-                <button type="button" onClick={exportBackup}>Backup JSON</button>
-                <label className="file-button">
-                  Restore
-                  <input type="file" accept="application/json" onChange={importBackup} hidden />
-                </label>
-              </div>
-              <div className="card-tile-grid" data-scroll>
-                {inventory.length ? (
-                  sortSearchCards(inventory.map((entry) => entry.card)).map((card) =>
-                    renderCardTile(card),
-                  )
-                ) : (
-                  <p className="empty-state">Add cards from search results.</p>
-                )}
-              </div>
-            </>
-          )}
         </section>
 
         <section

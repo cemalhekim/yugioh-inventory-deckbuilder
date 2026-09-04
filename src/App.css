@@ -705,10 +705,45 @@ button:disabled {
   width: 22px;
 }
 
-.search-tools > span {
+.inventory-toggle {
+  flex: 0 0 auto;
+  padding: 0;
+  width: 40px;
+}
+
+/* Pressed: light blue like the other active toggles; released: navy. */
+.inventory-toggle.active {
+  background: linear-gradient(180deg, rgba(57, 200, 255, 0.95), rgba(20, 91, 210, 0.95));
+  border-color: rgba(199, 241, 255, 0.9);
+  color: #03101d;
+}
+
+.panel-footer {
+  align-items: center;
+  border-top: 1px solid var(--kc-line);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.panel-footer > span {
   color: var(--kc-muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.panel-footer .row-actions button,
+.panel-footer .row-actions .file-button {
+  height: 30px;
+  padding: 0 10px;
+}
+
+.panel-footer .row-actions button:last-child {
+  background: linear-gradient(180deg, rgba(18, 47, 82, 0.96), rgba(8, 21, 39, 0.96));
+  border-color: var(--kc-line);
+  color: var(--kc-text);
 }
 
 .card-result {
