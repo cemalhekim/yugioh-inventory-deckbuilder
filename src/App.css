@@ -992,6 +992,20 @@ button:disabled {
   width: 100%;
 }
 
+/* Inventory-only mode: deck copies you do not own. */
+.deck-card.not-owned img,
+.deck-list-item.not-owned .line-thumb {
+  filter: grayscale(1) brightness(0.55);
+}
+
+.deck-card.not-owned {
+  border-color: rgba(255, 96, 132, 0.5);
+}
+
+.deck-list-item.not-owned > strong {
+  color: var(--kc-muted);
+}
+
 .deck-card-footer {
   align-items: center;
   display: flex;

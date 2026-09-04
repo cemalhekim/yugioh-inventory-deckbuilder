@@ -725,6 +725,23 @@ function App() {
       .sort((a, b) => a.card.name.localeCompare(b.card.name))
   }, [deckTotals, inventoryById])
 
+  // Per zone and card: how many rendered copies are covered by the inventory.
+  // Copies are budgeted main -> extra -> side, so the uncovered ones (greyed
+  // out in inventory-only mode) are always the last copies of the last zone.
+  const ownedCopiesByZoneCard = useMemo(() => {
+    const remaining = new Map(inventoryById)
+    const covered = new Map<string, number>()
+    for (const zone of zoneOrder) {
+      for (const entry of deck[zone]) {
+        const left = remaining.get(entry.card.id) ?? 0
+        const used = Math.min(left, entry.quantity)
+        covered.set(`${zone}:${entry.card.id}`, used)
+        remaining.set(entry.card.id, left - used)
+      }
+    }
+    return covered
+  }, [deck, inventoryById])
+
   const missingListText = useMemo(() => {
     return missingEntries
       .map((entry) => `${entry.missing}x ${entry.card.name}`)
@@ -2088,7 +2105,15 @@ function App() {
                     >
                       {deck[zone].flatMap((entry) =>
                         Array.from({ length: entry.quantity }, (_, copyIndex) => (
-                          <article className="deck-card" key={`${entry.card.id}-${copyIndex}`}>
+                          <article
+                            className={
+                              inventoryOnly &&
+                              copyIndex >= (ownedCopiesByZoneCard.get(`${zone}:${entry.card.id}`) ?? 0)
+                                ? 'deck-card not-owned'
+                                : 'deck-card'
+                            }
+                            key={`${entry.card.id}-${copyIndex}`}
+                          >
                             <img
                               src={entry.card.card_images?.[0]?.image_url_small}
                               alt={entry.card.name}
@@ -2116,7 +2141,15 @@ function App() {
                       rowHeight={34}
                     >
                     {deck[zone].map((entry) => (
-                      <div className="line-item deck-list-item" key={entry.card.id}>
+                      <div
+                        className={
+                          inventoryOnly &&
+                          entry.quantity > (ownedCopiesByZoneCard.get(`${zone}:${entry.card.id}`) ?? 0)
+                            ? 'line-item deck-list-item not-owned'
+                            : 'line-item deck-list-item'
+                        }
+                        key={entry.card.id}
+                      >
                         <img
                           className="line-thumb"
                           src={entry.card.card_images?.[0]?.image_url_small}
