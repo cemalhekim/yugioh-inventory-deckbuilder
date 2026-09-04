@@ -848,6 +848,12 @@ button:disabled {
   align-items: flex-start;
 }
 
+.deck-autosave {
+  color: var(--kc-muted);
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
 .deck-tools {
   align-items: flex-end;
   display: flex;

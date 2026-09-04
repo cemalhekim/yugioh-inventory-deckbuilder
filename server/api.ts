@@ -43,6 +43,12 @@ export function createApi(options: ApiOptions) {
   const hosted = options.hosted
   let deckDir = path.resolve(options.deckDir)
   let simulatorDir = path.resolve(options.simulatorDir)
+  // Content hashes of decks last written by the app's autosave (no history
+  // entry). The single-directory sync uses this to tell an autosave apart
+  // from an external edit, which does deserve an 'external' snapshot.
+  const autosavedHashes = new Map<string, string>()
+  const hashContent = (content: string) =>
+    createHash('sha256').update(content).digest('hex').slice(0, 12)
 
   function sendJson(res: import('node:http').ServerResponse, status: number, data: unknown) {
     res.statusCode = status
@@ -400,6 +406,7 @@ export function createApi(options: ApiOptions) {
       // snapshot for decks edited outside the app (Nextcloud, KaibaPro sync).
       for (const fileName of await listYdkFileNames(repoDeckDir)) {
         const content = await fs.readFile(path.join(repoDeckDir, fileName), 'utf8')
+        if (autosavedHashes.get(fileName) === hashContent(content)) continue
         await writeDeckVersion(fileName, content, 'external')
       }
       return { copiedToKaiba: 0, copiedToRepo: 0 }
@@ -778,6 +785,7 @@ export function createApi(options: ApiOptions) {
         if (req.method === 'PUT') {
           const body = JSON.parse(await readRequestBody(req)) as {
             branchName?: string
+            checkpoint?: boolean
             content?: string
             note?: string
             parentId?: string
@@ -790,6 +798,13 @@ export function createApi(options: ApiOptions) {
             fs.writeFile(deckPath, body.content, 'utf8'),
             fs.writeFile(repoDeckPath, body.content, 'utf8'),
           ])
+          if (body.checkpoint === false) {
+            // Autosave: the file is current, history is left alone.
+            autosavedHashes.set(fileName, hashContent(body.content))
+            sendJson(res, 200, { deckDir, repoDeckDir, fileName, checkpoint: false })
+            return
+          }
+          autosavedHashes.delete(fileName)
           if (typeof body.branchName === 'string' && body.branchName.trim()) {
             await writeDeckBranch(
               fileName,

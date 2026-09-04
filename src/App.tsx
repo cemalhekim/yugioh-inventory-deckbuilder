@@ -512,6 +512,10 @@ function App() {
   const lastSyncedStateRef = useRef<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [isDeckListDialogOpen, setIsDeckListDialogOpen] = useState(false)
+  // .ydk content the linked deck file is known to hold; autosave writes when
+  // the working deck drifts from it. Checkpoints (Save) add history entries.
+  const lastDeckFileContentRef = useRef('')
+  const [deckAutosavedAt, setDeckAutosavedAt] = useState<Date | null>(null)
   const [deckListText, setDeckListText] = useState('')
   const [isDeckListImporting, setIsDeckListImporting] = useState(false)
   const viewport = useAppScale()
@@ -1234,7 +1238,9 @@ function App() {
         nextDeck[zone] = makeEntriesFromCards(cards, zone)
       }
 
-      setDeck(sortDeckState(nextDeck))
+      const sortedDeck = sortDeckState(nextDeck)
+      lastDeckFileContentRef.current = createYdk(sortedDeck, payload.name)
+      setDeck(sortedDeck)
       setDeckName(payload.name)
       setSelectedKaibaDeck(payload.fileName)
       setActiveDeckBranchName('')
@@ -1424,19 +1430,23 @@ function App() {
       return
     }
 
+    const content = createYdk(deck, deckName)
     try {
       const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(target)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           branchName: activeDeckBranchName,
-          content: createYdk(deck, deckName),
+          checkpoint: true,
+          content,
           note,
           parentId: activeDeckVersionId,
         }),
       })
       if (!response.ok) throw new Error('Could not save KaibaPro deck.')
       const payload = (await response.json()) as { fileName: string }
+      lastDeckFileContentRef.current = content
+      setDeckAutosavedAt(new Date())
       setSelectedKaibaDeck(payload.fileName)
       if (!quiet) {
         setKaibaStatus(
@@ -1454,7 +1464,7 @@ function App() {
 
   function saveCurrentWorkingDeck() {
     const target = selectedKaibaDeck || deckName
-    const note = window.prompt('Save note', new Date().toLocaleString())
+    const note = window.prompt('Checkpoint note', new Date().toLocaleString())
     if (note === null) return
     void saveKaibaDeck(target, false, note)
   }
@@ -1599,6 +1609,46 @@ function App() {
       window.removeEventListener('pagehide', flush)
     }
   }, [inventory, deck, deckName, saveRepoBackup])
+
+  // Deck autosave: the linked .ydk file always mirrors the working deck;
+  // only the Checkpoint button records a history version.
+  useEffect(() => {
+    if (!selectedKaibaDeck) return
+    const content = createYdk(deck, deckName)
+    if (content === lastDeckFileContentRef.current) return
+
+    const url = `/api/kaibapro/decks/${encodeURIComponent(selectedKaibaDeck)}`
+    const body = JSON.stringify({ content, checkpoint: false })
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        })
+        if (!response.ok) throw new Error('Deck autosave failed.')
+        lastDeckFileContentRef.current = content
+        setDeckAutosavedAt(new Date())
+      } catch (error) {
+        setKaibaStatus(error instanceof Error ? error.message : 'Deck autosave failed.')
+      }
+    }, 1000)
+    const flush = () => {
+      if (lastDeckFileContentRef.current === content) return
+      void fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      })
+      lastDeckFileContentRef.current = content
+    }
+    window.addEventListener('pagehide', flush)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [deck, deckName, selectedKaibaDeck])
 
   return (
     <div className="app-viewport">
@@ -1859,6 +1909,15 @@ function App() {
                 onChange={(event) => setDeckName(event.target.value)}
                 aria-label="Deck name"
               />
+              <p className="deck-autosave">
+                {selectedKaibaDeck
+                  ? `${selectedKaibaDeck}${
+                      deckAutosavedAt
+                        ? ` · autosaved ${deckAutosavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        : ''
+                    }`
+                  : 'Not linked to a deck file yet. Checkpoint creates one.'}
+              </p>
             </div>
             <div className="deck-tools">
               <div className="view-toggle" aria-label="Deck view mode">
@@ -1888,8 +1947,12 @@ function App() {
                 <button type="button" onClick={() => fileInputRef.current?.click()}>
                   Import YDK
                 </button>
-                <button type="button" onClick={saveCurrentWorkingDeck}>
-                  Save Deck
+                <button
+                  type="button"
+                  title="Record a named version in the history. The deck file itself autosaves."
+                  onClick={saveCurrentWorkingDeck}
+                >
+                  Checkpoint
                 </button>
               </div>
             </div>
