@@ -844,29 +844,50 @@ export function createApi(options: ApiOptions) {
 
   const appState: ApiHandler = async (req, res) => {
       try {
-        if (req.method === 'GET') {
+        // The file's mtime doubles as a revision so that two tabs or devices
+        // cannot silently overwrite each other's inventory: a PUT carrying a
+        // stale baseRevision is refused with the current state (409) and the
+        // client merges before retrying.
+        const readState = async () => {
           try {
-            const content = await fs.readFile(repoStatePath, 'utf8')
-            sendJson(res, 200, { state: JSON.parse(content) })
+            const [content, stat] = await Promise.all([
+              fs.readFile(repoStatePath, 'utf8'),
+              fs.stat(repoStatePath),
+            ])
+            return { state: JSON.parse(content) as unknown, revision: String(stat.mtimeMs) }
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-              sendJson(res, 200, { state: null })
-              return
+              return { state: null, revision: '' }
             }
             throw error
           }
+        }
+
+        if (req.method === 'GET') {
+          sendJson(res, 200, await readState())
           return
         }
 
         if (req.method === 'PUT') {
-          const body = JSON.parse(await readRequestBody(req)) as { state?: unknown }
+          const body = JSON.parse(await readRequestBody(req)) as {
+            state?: unknown
+            baseRevision?: string
+          }
           if (!body.state || typeof body.state !== 'object') {
             sendJson(res, 400, { error: 'state must be an object' })
             return
           }
+          if (typeof body.baseRevision === 'string') {
+            const current = await readState()
+            if (current.revision && current.revision !== body.baseRevision) {
+              sendJson(res, 409, { error: 'conflict', ...current })
+              return
+            }
+          }
           await fs.mkdir(path.dirname(repoStatePath), { recursive: true })
           await fs.writeFile(repoStatePath, `${JSON.stringify(body.state, null, 2)}\n`, 'utf8')
-          sendJson(res, 200, { filePath: repoStatePath })
+          const stat = await fs.stat(repoStatePath)
+          sendJson(res, 200, { filePath: repoStatePath, revision: String(stat.mtimeMs) })
           return
         }
 

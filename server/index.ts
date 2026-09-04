@@ -81,6 +81,15 @@ async function serveStatic(pathname: string, res: http.ServerResponse) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const pathname = url.pathname
+  if (pathname.startsWith('/api/')) {
+    const startedAt = Date.now()
+    const agent = (req.headers['user-agent'] ?? '').replace(/\s*\(.*?\)/g, '').slice(0, 60)
+    res.once('finish', () => {
+      console.log(
+        `${new Date().toISOString()} ${req.method} ${pathname} ${res.statusCode} ${Date.now() - startedAt}ms ${agent}`,
+      )
+    })
+  }
 
   try {
     if (pathname === '/healthz') {

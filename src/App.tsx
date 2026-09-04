@@ -510,6 +510,7 @@ function App() {
   // Serialized state last written to (or read from) the server; null until
   // the initial load finished, so a stale browser copy never overwrites it.
   const lastSyncedStateRef = useRef<string | null>(null)
+  const stateRevisionRef = useRef('')
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [isDeckListDialogOpen, setIsDeckListDialogOpen] = useState(false)
   // .ydk content the linked deck file is known to hold; autosave writes when
@@ -581,8 +582,10 @@ function App() {
         if (!response.ok) return
         const payload = (await response.json()) as {
           state: Partial<PersistedState> | null
+          revision?: string
         }
         if (canceled) return
+        stateRevisionRef.current = payload.revision ?? ''
         if (!payload.state) {
           lastSyncedStateRef.current = ''
           return
@@ -1462,6 +1465,44 @@ function App() {
     }
   }
 
+  // New empty deck: creates and links its .ydk right away (with a baseline
+  // checkpoint), so autosave picks it up from the first card.
+  async function createNewDeck() {
+    const name = window.prompt('New deck name')?.trim()
+    if (!name) return
+    const safeName = name.replace(/[^a-z0-9 _.-]/gi, '').trim()
+    if (!safeName) {
+      setKaibaStatus('Use letters, digits, spaces, dots, dashes or underscores.')
+      return
+    }
+    if (kaibaDecks.some((file) => file.name.toLowerCase() === safeName.toLowerCase())) {
+      setKaibaStatus(`A deck named ${safeName} already exists. Open it instead.`)
+      return
+    }
+
+    const content = createYdk(emptyDeck, safeName)
+    try {
+      const response = await fetch(`/api/kaibapro/decks/${encodeURIComponent(safeName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, checkpoint: true, note: 'created' }),
+      })
+      if (!response.ok) throw new Error('Could not create deck.')
+      const payload = (await response.json()) as { fileName: string }
+      lastDeckFileContentRef.current = content
+      setDeck(emptyDeck)
+      setDeckName(safeName)
+      setSelectedKaibaDeck(payload.fileName)
+      setActiveDeckBranchName('')
+      setDeckAutosavedAt(new Date())
+      setKaibaStatus(`Created ${payload.fileName}.`)
+      await refreshKaibaDecks()
+      await loadDeckHistory(payload.fileName)
+    } catch (error) {
+      setKaibaStatus(error instanceof Error ? error.message : 'Create deck failed.')
+    }
+  }
+
   function saveCurrentWorkingDeck() {
     const target = selectedKaibaDeck || deckName
     const note = window.prompt('Checkpoint note', new Date().toLocaleString())
@@ -1563,27 +1604,78 @@ function App() {
     }
   }
 
-  const saveRepoBackup = useCallback(async (quiet = false) => {
-    const serialized = JSON.stringify({ inventory, deck, deckName })
-    try {
-      const response = await fetch('/api/app-state', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: { inventory, deck, deckName } }),
-      })
-      if (!response.ok) throw new Error('Could not save repository backup.')
-      const payload = (await response.json()) as { filePath: string }
-      lastSyncedStateRef.current = serialized
-      setLastSavedAt(new Date())
-      if (!quiet) setStatus(`Repository backup saved: ${payload.filePath}`)
-      return true
-    } catch (error) {
-      if (!quiet) {
-        setStatus(error instanceof Error ? error.message : 'Repository backup failed.')
+  // Three-way merge for the inventory when another tab or device wrote
+  // first: apply this tab's quantity deltas (local minus last synced) on top
+  // of the server's inventory. The deck being edited here wins.
+  const mergeInventoryWithServer = useCallback(
+    (serverInventory: InventoryEntry[]) => {
+      const base = lastSyncedStateRef.current
+        ? (JSON.parse(lastSyncedStateRef.current) as PersistedState).inventory
+        : []
+      const baseById = new Map(base.map((entry) => [entry.card.id, entry.quantity]))
+      const localById = new Map(inventory.map((entry) => [entry.card.id, entry]))
+      const merged = new Map(serverInventory.map((entry) => [entry.card.id, { ...entry }]))
+      const ids = new Set([...baseById.keys(), ...localById.keys()])
+      for (const id of ids) {
+        const delta = (localById.get(id)?.quantity ?? 0) - (baseById.get(id) ?? 0)
+        if (!delta) continue
+        const current = merged.get(id)
+        const card = current?.card ?? localById.get(id)?.card
+        if (!card) continue
+        const quantity = (current?.quantity ?? 0) + delta
+        if (quantity > 0) merged.set(id, { card, quantity })
+        else merged.delete(id)
       }
-      return false
-    }
-  }, [deck, deckName, inventory])
+      return Array.from(merged.values()).sort((a, b) => a.card.name.localeCompare(b.card.name))
+    },
+    [inventory],
+  )
+
+  const saveRepoBackup = useCallback(
+    async (quiet = false) => {
+      const serialized = JSON.stringify({ inventory, deck, deckName })
+      try {
+        const response = await fetch('/api/app-state', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            state: { inventory, deck, deckName },
+            baseRevision: stateRevisionRef.current,
+          }),
+        })
+        if (response.status === 409) {
+          const payload = (await response.json()) as {
+            state: Partial<PersistedState> | null
+            revision: string
+          }
+          const serverState = normalizeState(payload.state ?? {})
+          const mergedInventory = mergeInventoryWithServer(serverState.inventory)
+          stateRevisionRef.current = payload.revision
+          lastSyncedStateRef.current = JSON.stringify({
+            inventory: serverState.inventory,
+            deck: serverState.deck,
+            deckName: serverState.deckName,
+          })
+          setInventory(mergedInventory)
+          setStatus('Merged inventory changes made elsewhere.')
+          return false
+        }
+        if (!response.ok) throw new Error('Could not save repository backup.')
+        const payload = (await response.json()) as { filePath: string; revision: string }
+        stateRevisionRef.current = payload.revision
+        lastSyncedStateRef.current = serialized
+        setLastSavedAt(new Date())
+        if (!quiet) setStatus(`Repository backup saved: ${payload.filePath}`)
+        return true
+      } catch (error) {
+        if (!quiet) {
+          setStatus(error instanceof Error ? error.message : 'Repository backup failed.')
+        }
+        return false
+      }
+    },
+    [deck, deckName, inventory, mergeInventoryWithServer],
+  )
 
   // Autosave: every inventory/deck change reaches the server shortly after it
   // happens, and a pending change is flushed when the tab goes away.
@@ -1598,7 +1690,10 @@ function App() {
       void fetch('/api/app-state', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: { inventory, deck, deckName } }),
+        body: JSON.stringify({
+          state: { inventory, deck, deckName },
+          baseRevision: stateRevisionRef.current,
+        }),
         keepalive: true,
       })
       lastSyncedStateRef.current = serialized
@@ -1665,8 +1760,8 @@ function App() {
         <div className="brand-block">
           <img className="kc-emblem" src="/kaibacorp-logo.png" alt="" aria-hidden="true" />
           <div>
-            <p className="eyebrow">KaibaCorp deck command</p>
-            <h1>Build from what you own. Buy only what is missing.</h1>
+            <h1>KaibaCorp Deck Command</h1>
+            <p className="tagline">Build from what you own. Buy only what is missing.</p>
           </div>
         </div>
         <div className="topbar-actions">
@@ -2048,8 +2143,14 @@ function App() {
               ) : null}
             </div>
             <div className="kaiba-folder-actions">
-              <button type="button" onClick={() => void refreshKaibaDecks()}>
-                Refresh
+              <button
+                type="button"
+                className="new-deck-button"
+                title="Create a new empty deck"
+                aria-label="New deck"
+                onClick={() => void createNewDeck()}
+              >
+                +
               </button>
             </div>
           </div>

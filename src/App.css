@@ -127,6 +127,18 @@
   text-transform: uppercase;
 }
 
+.tagline {
+  color: var(--kc-muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.new-deck-button {
+  font-size: 20px;
+  padding: 0;
+  width: 36px;
+}
+
 .topbar h1 {
   color: var(--kc-ice);
   font-size: 22px;

@@ -1,4 +1,4 @@
-# YGO Inventory Deckbuilder
+# KaibaCorp Deck Command
 
 Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporting
 `.ydk` files, and copying missing cards into a Cardmarket-ready wants list.
