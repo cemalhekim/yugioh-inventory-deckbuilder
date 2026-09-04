@@ -454,6 +454,10 @@ function App() {
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
   const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
   const shellRef = useRef<HTMLElement>(null)
+  // Serialized state last written to (or read from) the server; null until
+  // the initial load finished, so a stale browser copy never overwrites it.
+  const lastSyncedStateRef = useRef<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const viewport = useAppScale()
   const appScale = viewport.scale
   useScrollLock()
@@ -518,15 +522,25 @@ function App() {
         const payload = (await response.json()) as {
           state: Partial<PersistedState> | null
         }
-        if (!payload.state || canceled) return
+        if (canceled) return
+        if (!payload.state) {
+          lastSyncedStateRef.current = ''
+          return
+        }
 
         const nextState = normalizeState(payload.state)
+        lastSyncedStateRef.current = JSON.stringify({
+          inventory: nextState.inventory,
+          deck: nextState.deck,
+          deckName: nextState.deckName,
+        })
         setInventory(nextState.inventory)
         setDeck(nextState.deck)
         setDeckName(nextState.deckName)
         setStatus('Loaded inventory from repository backup.')
       } catch {
         // Static previews do not provide the local repo state API.
+        if (!canceled) lastSyncedStateRef.current = ''
       }
     }
 
@@ -1436,6 +1450,7 @@ function App() {
   }
 
   const saveRepoBackup = useCallback(async (quiet = false) => {
+    const serialized = JSON.stringify({ inventory, deck, deckName })
     try {
       const response = await fetch('/api/app-state', {
         method: 'PUT',
@@ -1444,13 +1459,42 @@ function App() {
       })
       if (!response.ok) throw new Error('Could not save repository backup.')
       const payload = (await response.json()) as { filePath: string }
+      lastSyncedStateRef.current = serialized
+      setLastSavedAt(new Date())
       if (!quiet) setStatus(`Repository backup saved: ${payload.filePath}`)
+      return true
     } catch (error) {
       if (!quiet) {
         setStatus(error instanceof Error ? error.message : 'Repository backup failed.')
       }
+      return false
     }
   }, [deck, deckName, inventory])
+
+  // Autosave: every inventory/deck change reaches the server shortly after it
+  // happens, and a pending change is flushed when the tab goes away.
+  useEffect(() => {
+    if (lastSyncedStateRef.current === null) return
+    const serialized = JSON.stringify({ inventory, deck, deckName })
+    if (serialized === lastSyncedStateRef.current) return
+
+    const timer = window.setTimeout(() => void saveRepoBackup(true), 800)
+    const flush = () => {
+      if (lastSyncedStateRef.current === serialized) return
+      void fetch('/api/app-state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: { inventory, deck, deckName } }),
+        keepalive: true,
+      })
+      lastSyncedStateRef.current = serialized
+    }
+    window.addEventListener('pagehide', flush)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [inventory, deck, deckName, saveRepoBackup])
 
   async function importBackup(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -1608,7 +1652,12 @@ function App() {
             {visibleResults.map((card) => renderCardTile(card))}
           </div>
           <div className="panel-footer">
-            <span>{visibleResults.length} cards</span>
+            <span>
+              {visibleResults.length} cards
+              {lastSavedAt
+                ? ` · saved ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : ''}
+            </span>
             <div className="row-actions">
               <button type="button" onClick={() => void saveRepoBackup()}>
                 Save
