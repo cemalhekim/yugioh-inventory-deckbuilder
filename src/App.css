@@ -790,13 +790,16 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  left: -240px;
+  /* Must be painted for setDragImage to capture it: body is fixed + overflow
+     hidden now, so an off-screen position rendered nothing. Sit at the
+     origin, behind the app viewport instead. */
+  left: 0;
   padding: 8px;
   pointer-events: none;
   position: fixed;
-  top: -320px;
+  top: 0;
   width: 112px;
-  z-index: 9999;
+  z-index: -1;
 }
 
 .card-drag-preview img {
