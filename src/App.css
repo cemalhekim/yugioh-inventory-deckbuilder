@@ -633,9 +633,9 @@ button:disabled {
 .card-tile-grid {
   align-content: start;
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-  padding: 10px;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 8px;
 }
 
 .card-tile-grid > .muted {
@@ -660,13 +660,13 @@ button:disabled {
   width: 100%;
 }
 
-.card-tile:hover {
-  z-index: 2;
+.card-tile.exhausted img {
+  filter: grayscale(1) brightness(0.55);
 }
 
-.card-tile:hover img {
-  transform: scale(1.5);
-  transition: transform 120ms ease;
+.card-tile.exhausted .card-tile-count {
+  border-color: rgba(143, 180, 207, 0.5);
+  color: var(--kc-muted);
 }
 
 .card-tile-count {
@@ -931,17 +931,7 @@ button:disabled {
   background: rgba(246, 251, 255, 0.08);
   display: block;
   object-fit: cover;
-  transition: transform 120ms ease;
   width: 100%;
-}
-
-.deck-card:hover {
-  position: relative;
-  z-index: 2;
-}
-
-.deck-card:hover img {
-  transform: scale(1.6);
 }
 
 .deck-card-footer {

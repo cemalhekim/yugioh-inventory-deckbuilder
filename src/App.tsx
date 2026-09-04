@@ -716,6 +716,13 @@ function App() {
         setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
         return current
       }
+      if (inventoryOnly) {
+        const owned = inventoryById.get(card.id) ?? 0
+        if (countDeckCardCopies(current, card.id) >= owned) {
+          setStatus(`You own ${owned} ${card.name}; all copies are already in the deck.`)
+          return current
+        }
+      }
       return addCardCopies(current, targetZone, card)
     })
   }
@@ -788,6 +795,13 @@ function App() {
       if (delta > 0 && countDeckCardCopies(current, card.id) >= maxDeckCopies) {
         setStatus(`${card.name} is already at ${maxDeckCopies} copies in the deck.`)
         return current
+      }
+      if (delta > 0 && inventoryOnly) {
+        const owned = inventoryById.get(card.id) ?? 0
+        if (countDeckCardCopies(current, card.id) >= owned) {
+          setStatus(`You own ${owned} ${card.name}; all copies are already in the deck.`)
+          return current
+        }
       }
       return addCardCopies(current, zone, card, delta)
     })
@@ -1081,8 +1095,10 @@ function App() {
 
   function renderCardTile(card: YgoCard) {
     const owned = inventoryById.get(card.id) ?? 0
+    const inDeck = deckTotals.get(card.id)?.quantity ?? 0
+    const exhausted = owned > 0 && inDeck >= owned
     return (
-      <article className="card-tile" key={card.id}>
+      <article className={exhausted ? 'card-tile exhausted' : 'card-tile'} key={card.id}>
         <img
           src={card.card_images?.[0]?.image_url_small}
           alt={card.name}
