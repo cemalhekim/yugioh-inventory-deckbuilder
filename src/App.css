@@ -634,7 +634,8 @@ button:disabled {
   align-content: start;
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* 6 across the 400px panel gives the same ~60px card as the deck zones. */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   padding: 8px;
 }
 
@@ -673,12 +674,12 @@ button:disabled {
   background: rgba(3, 10, 20, 0.92);
   border: 1px solid rgba(150, 225, 255, 0.5);
   border-radius: 999px;
-  bottom: 4px;
+  bottom: 2px;
   color: var(--kc-cyan);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
-  left: 4px;
-  padding: 1px 6px;
+  left: 2px;
+  padding: 0 4px;
   pointer-events: none;
   position: absolute;
   z-index: 3;
@@ -700,9 +701,9 @@ button:disabled {
 }
 
 .card-tile-actions button {
-  height: 22px;
+  height: 18px;
   padding: 0;
-  width: 22px;
+  width: 18px;
 }
 
 .inventory-toggle {

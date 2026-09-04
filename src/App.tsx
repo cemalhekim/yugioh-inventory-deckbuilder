@@ -93,6 +93,8 @@ const zoneLabels: Record<DeckZone, string> = {
 }
 
 const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
+// Same card size in every zone: 15 across the deck panel on the 1920px canvas (~60px cards).
+const deckCardColumns = 15
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 const cardmarketPayloadHashKey = 'ygo-inventory-wants'
 const cardDragDataType = 'application/ygo-card'
@@ -1772,6 +1774,7 @@ function App() {
                       count={deck[zone].reduce((sum, entry) => sum + entry.quantity, 0)}
                       gap={6}
                       itemAspect={0.686}
+                      minColumns={deckCardColumns}
                       mode="cards"
                     >
                       {deck[zone].flatMap((entry) =>
