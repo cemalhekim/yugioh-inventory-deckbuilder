@@ -1134,13 +1134,7 @@ function App() {
         />
         {inventoryOnly && owned > 0 ? <span className="card-tile-count">x{owned}</span> : null}
         <div className="card-tile-actions">
-          <button
-            type="button"
-            title="Add one to inventory"
-            onClick={() => addToInventory(card, 1)}
-          >
-            +
-          </button>
+          {/* "−" sits left of "+" so "+" stays under the cursor when it appears. */}
           {owned > 0 ? (
             <button
               type="button"
@@ -1150,6 +1144,13 @@ function App() {
               −
             </button>
           ) : null}
+          <button
+            type="button"
+            title="Add one to inventory"
+            onClick={() => addToInventory(card, 1)}
+          >
+            +
+          </button>
         </div>
       </article>
     )
