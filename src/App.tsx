@@ -1096,7 +1096,9 @@ function App() {
   function renderCardTile(card: YgoCard) {
     const owned = inventoryById.get(card.id) ?? 0
     const inDeck = deckTotals.get(card.id)?.quantity ?? 0
-    const exhausted = owned > 0 && inDeck >= owned
+    // Counts and greying only matter in inventory-only mode; otherwise every
+    // card is freely usable up to the normal 3-copy rule.
+    const exhausted = inventoryOnly && owned > 0 && inDeck >= owned
     return (
       <article className={exhausted ? 'card-tile exhausted' : 'card-tile'} key={card.id}>
         <img
@@ -1113,7 +1115,7 @@ function App() {
             else addToDeck(card)
           }}
         />
-        {owned > 0 ? <span className="card-tile-count">x{owned}</span> : null}
+        {inventoryOnly && owned > 0 ? <span className="card-tile-count">x{owned}</span> : null}
         <div className="card-tile-actions">
           <button
             type="button"
