@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Deck files and inventory live on the home server (/srv/data/ygo) and reach
+# desktops through Nextcloud; the repo no longer carries a copy.
+decks/
+data/

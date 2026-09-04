@@ -447,6 +447,8 @@ function App() {
     () => localStorage.getItem(SIMULATOR_APP_DIR_KEY) ?? '',
   )
   const [repoDeckDir, setRepoDeckDir] = useState('')
+  // Hosted (home server container): no simulator launcher, no OS folder pickers.
+  const [isHosted, setIsHosted] = useState(false)
   const [selectedKaibaDeck, setSelectedKaibaDeck] = useState('')
   const [kaibaStatus, setKaibaStatus] = useState('Connect to KaibaPro decks.')
   const [isKaibaFolderPicking, setIsKaibaFolderPicking] = useState(false)
@@ -471,6 +473,19 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
   const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    let canceled = false
+    fetch('/api/host')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { hosted?: boolean } | null) => {
+        if (!canceled && payload?.hosted) setIsHosted(true)
+      })
+      .catch(() => {})
+    return () => {
+      canceled = true
+    }
+  }, [])
 
   useEffect(() => {
     const state: PersistedState = { inventory, deck, deckName }
@@ -1505,16 +1520,20 @@ function App() {
               Sets & Products
             </button>
           </div>
-          <button type="button" onClick={() => void launchSimulator()}>
-            Launch Simulator
-          </button>
-          <button
-            type="button"
-            disabled={isKaibaFolderPicking}
-            onClick={() => void chooseKaibaDeckFolder()}
-          >
-            Synch Simulator
-          </button>
+          {isHosted ? null : (
+            <>
+              <button type="button" onClick={() => void launchSimulator()}>
+                Launch Simulator
+              </button>
+              <button
+                type="button"
+                disabled={isKaibaFolderPicking}
+                onClick={() => void chooseKaibaDeckFolder()}
+              >
+                Synch Simulator
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -1881,7 +1900,9 @@ function App() {
             <div>
               <h2>Decks</h2>
               <p>{kaibaDeckDir || kaibaStatus}</p>
-              {repoDeckDir ? <p>Repo mirror: {repoDeckDir}</p> : null}
+              {repoDeckDir && repoDeckDir !== kaibaDeckDir ? (
+                <p>Repo mirror: {repoDeckDir}</p>
+              ) : null}
             </div>
             <div className="kaiba-folder-actions">
               <button type="button" onClick={() => void refreshKaibaDecks()}>

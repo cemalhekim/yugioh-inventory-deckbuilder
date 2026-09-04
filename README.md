@@ -21,7 +21,7 @@ Local-first MVP for tracking a Yu-Gi-Oh! card inventory, building decks, exporti
 - Prepare a Cardmarket Wants workflow by generating a timestamped list name,
   opening the Wants page, and copying the missing-card list.
 - Backup and restore app data as JSON.
-- Save app data to `data/inventory-backup.json` in this repository.
+- Save app data to `data/inventory-backup.json` (dev) or `/data/inventory-backup.json` (hosted).
 - Persist data locally in the browser using `localStorage`.
 
 Bulk adding from sealed products adds one copy of each listed card. The
@@ -34,6 +34,35 @@ structure decks.
 npm install
 npm run dev
 ```
+
+## Hosted (home server)
+
+The same app runs as a container on the home server and is reached at
+`https://asuspro-homeserver.tail95ac85.ts.net:10443` over Tailscale. In that
+mode `server/index.ts` serves the built `dist/` and the API from `server/api.ts`
+against a single data directory (`/data`, bind-mounted from `/srv/data/ygo`):
+
+```
+/srv/data/ygo/decks/                 .ydk files, source of truth
+/srv/data/ygo/decks/.history/        per-deck version snapshots
+/srv/data/ygo/inventory-backup.json  inventory + current deck
+```
+
+That directory is also mounted into Nextcloud as the `YuGiOh` folder, so it
+syncs to every device with the Nextcloud client; the KaibaPro deck folder on a
+desktop can simply be a symlink into it. Simulator launch and OS folder pickers
+are desktop-only and hidden in hosted mode.
+
+The stack lives in `/opt/stacks/ygo` on the server; `deploy.sh` there pulls
+this repository and rebuilds the image:
+
+```bash
+docker build -t ygo-deckbuilder .
+docker run --rm -p 3010:3000 -v /srv/data/ygo:/data --user 33:33 ygo-deckbuilder
+```
+
+`decks/` and `data/` are no longer tracked in git: the server copy is canonical
+and Nextcloud carries it to desktops.
 
 When running through the Vite dev server, the app first checks for
 `data/inventory-backup.json`. If that repository backup exists, it loads the
