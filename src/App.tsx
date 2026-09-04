@@ -74,6 +74,9 @@ const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
 const SIMULATOR_APP_DIR_KEY = 'simulator-app-dir-v1'
 const INVENTORY_ONLY_KEY = 'inventory-only-v1'
 const maxDeckCopies = 3
+// Search results are unbounded ("dragon" matches well over a thousand cards);
+// the grid scrolls, images load lazily, this just keeps the DOM sane.
+const maxSearchResults = 300
 const deckZoneLimits: Record<DeckZone, number> = {
   main: 60,
   extra: 15,
@@ -655,8 +658,13 @@ function App() {
         )
         if (!response.ok) throw new Error('No cards found')
         const payload = (await response.json()) as { data: YgoCard[] }
-        setResults(sortSearchCards(payload.data).slice(0, 20))
-        setStatus(`Found ${payload.data.length} matching cards.`)
+        const sorted = sortSearchCards(payload.data)
+        setResults(sorted.slice(0, maxSearchResults))
+        setStatus(
+          sorted.length > maxSearchResults
+            ? `Found ${sorted.length} matching cards, showing the first ${maxSearchResults}. Narrow the search for the rest.`
+            : `Found ${sorted.length} matching cards.`,
+        )
       } catch (error) {
         if (!controller.signal.aborted) {
           setResults([])
@@ -1184,6 +1192,7 @@ function App() {
         <img
           src={card.card_images?.[0]?.image_url_small}
           alt={card.name}
+          loading="lazy"
           draggable
           title="Right-click: add to deck. Shift+right-click: side deck. Drag to a zone."
           onDragStart={(event) => handleSearchCardDragStart(event, card)}
