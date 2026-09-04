@@ -31,8 +31,17 @@ const upstreamImages = 'https://images.ygoprodeck.com/images'
 const imageKinds = { small: 'cards_small', full: 'cards', cropped: 'cards_cropped' } as const
 type ImageKind = keyof typeof imageKinds
 
-/** Minimum gap between two upstream requests: 3/s, well under the 20/s limit. */
-const upstreamMinIntervalMs = 350
+/** API calls: one at a time, 3/s, well under the documented 20/s limit. */
+const apiMinIntervalMs = 350
+/** Image downloads (images.ygoprodeck.com): 4 in flight, ~8/s on cache misses. */
+const imageMinIntervalMs = 120
+const imageConcurrency = 4
+/**
+ * Background warm-up of the image cache after the dump is loaded: one image
+ * every this many ms while no browser request is waiting, so the first visit
+ * to any card is served from disk after a couple of hours of uptime.
+ */
+const prefetchIntervalMs = 500
 /** Re-check `checkDBVer.php` this often while the server runs. */
 const versionCheckIntervalMs = 24 * 60 * 60 * 1000
 const searchLimit = 500
@@ -43,6 +52,8 @@ export type CardDbOptions = {
   cacheDir: string
   /** Absolute URL prefix the browser uses for images, default `/api/images`. */
   imageBasePath?: string
+  /** Image kinds to warm in the background, default `['small']`; `[]` disables it. */
+  prefetchKinds?: ImageKind[]
   log?: (message: string) => void
 }
 
@@ -93,25 +104,55 @@ export function createCardDb(options: CardDbOptions) {
   const imageBasePath = (options.imageBasePath ?? '/api/images').replace(/\/$/, '')
   const log = options.log ?? ((message: string) => console.log(`${new Date().toISOString()} carddb ${message}`))
 
-  // ---- upstream throttle -------------------------------------------------
-  let upstreamChain: Promise<unknown> = Promise.resolve()
-  let lastUpstreamAt = 0
-  function throttled<T>(task: () => Promise<T>): Promise<T> {
-    const run = upstreamChain.then(async () => {
-      const wait = lastUpstreamAt + upstreamMinIntervalMs - Date.now()
-      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
-      lastUpstreamAt = Date.now()
-      return task()
-    })
-    upstreamChain = run.catch(() => undefined)
-    return run
+  // ---- upstream throttles ------------------------------------------------
+  // A limiter admits at most `concurrency` tasks at once and spaces starts
+  // by `minIntervalMs`; tasks run in the order they were queued.
+  function createLimiter(minIntervalMs: number, concurrency: number) {
+    const queue: Array<() => void> = []
+    let active = 0
+    let lastStartAt = 0
+    let pump: NodeJS.Timeout | null = null
+    const next = () => {
+      if (pump || active >= concurrency || queue.length === 0) return
+      const wait = lastStartAt + minIntervalMs - Date.now()
+      if (wait > 0) {
+        pump = setTimeout(() => {
+          pump = null
+          next()
+        }, wait)
+        return
+      }
+      lastStartAt = Date.now()
+      active += 1
+      queue.shift()!()
+      next()
+    }
+    return {
+      get pending() {
+        return active + queue.length
+      },
+      run<T>(task: () => Promise<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+          queue.push(() => {
+            task()
+              .then(resolve, reject)
+              .finally(() => {
+                active -= 1
+                next()
+              })
+          })
+          next()
+        })
+      },
+    }
   }
+  const apiLimiter = createLimiter(apiMinIntervalMs, 1)
+  const imageLimiter = createLimiter(imageMinIntervalMs, imageConcurrency)
 
-  async function fetchUpstream(url: string, init?: RequestInit) {
-    return throttled(() =>
+  function fetchUpstream(url: string, limiter = apiLimiter) {
+    return limiter.run(() =>
       fetch(url, {
-        ...init,
-        headers: { 'User-Agent': 'yugioh-inventory-deckbuilder (self-hosted)', ...init?.headers },
+        headers: { 'User-Agent': 'yugioh-inventory-deckbuilder (self-hosted)' },
         signal: AbortSignal.timeout(60_000),
       }),
     )
@@ -234,21 +275,25 @@ export function createCardDb(options: CardDbOptions) {
   }
 
   let timer: NodeJS.Timeout | null = null
+  let stopped = false
   /** Load the disk copy, then check upstream in the background. Never throws. */
   async function start() {
     await fs.mkdir(imagesDir, { recursive: true })
     await loadFromDisk()
     const tick = () =>
-      refresh().catch((error) => {
-        const cause = (error as { cause?: unknown }).cause
-        log(`refresh failed: ${String(error)}${cause ? ` (${String(cause)})` : ''}`)
-      })
+      refresh()
+        .catch((error) => {
+          const cause = (error as { cause?: unknown }).cause
+          log(`refresh failed: ${String(error)}${cause ? ` (${String(cause)})` : ''}`)
+        })
+        .then(() => startPrefetch())
     void tick()
     timer = setInterval(tick, versionCheckIntervalMs)
     timer.unref()
   }
 
   function stop() {
+    stopped = true
     if (timer) clearInterval(timer)
     timer = null
   }
@@ -376,6 +421,7 @@ export function createCardDb(options: CardDbOptions) {
           fetchedAt: dump?.fetchedAt ?? '',
           count: byId.size,
           source: dump ? 'local' : 'upstream',
+          images: { queued: imageLimiter.pending, prefetch: { ...prefetch } },
         })
         return
       }
@@ -423,8 +469,11 @@ export function createCardDb(options: CardDbOptions) {
   }
 
   const imageFetches = new Map<string, Promise<string>>()
+  function imagePath(id: number, kind: ImageKind) {
+    return path.join(imagesDir, imageKinds[kind], `${id}.jpg`)
+  }
   async function ensureImage(id: number, kind: ImageKind) {
-    const filePath = path.join(imagesDir, imageKinds[kind], `${id}.jpg`)
+    const filePath = imagePath(id, kind)
     const key = `${kind}/${id}`
     const pending = imageFetches.get(key)
     if (pending) return pending
@@ -435,7 +484,10 @@ export function createCardDb(options: CardDbOptions) {
       } catch {
         // not cached yet
       }
-      const response = await fetchUpstream(`${upstreamImages}/${imageKinds[kind]}/${id}.jpg`)
+      const response = await fetchUpstream(
+        `${upstreamImages}/${imageKinds[kind]}/${id}.jpg`,
+        imageLimiter,
+      )
       if (response.status === 404) throw Object.assign(new Error('Image not found'), { status: 404 })
       if (!response.ok || !response.body) throw new Error(`image upstream ${response.status}`)
       await writeFileAtomic(filePath, Buffer.from(await response.arrayBuffer()))
@@ -445,6 +497,51 @@ export function createCardDb(options: CardDbOptions) {
     })
     imageFetches.set(key, task)
     return task
+  }
+
+  // ---- background warm-up ------------------------------------------------
+  const prefetchKinds = options.prefetchKinds ?? ['small']
+  const prefetch = { running: false, kind: '' as ImageKind | '', done: 0, total: 0, failed: 0 }
+  let prefetchStarted = false
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  async function startPrefetch() {
+    if (prefetchStarted || stopped || !dump || prefetchKinds.length === 0) return
+    prefetchStarted = true
+    prefetch.running = true
+    try {
+      for (const kind of prefetchKinds) {
+        const ids = Array.from(byId.values()).flatMap((card) =>
+          (card.card_images ?? []).map((image) => image.id),
+        )
+        prefetch.kind = kind
+        prefetch.total = ids.length
+        prefetch.done = 0
+        prefetch.failed = 0
+        // Skip what is already on disk without touching the network.
+        const cached = new Set(
+          await fs.readdir(path.join(imagesDir, imageKinds[kind])).catch(() => [] as string[]),
+        )
+        const missing = ids.filter((id) => !cached.has(`${id}.jpg`))
+        prefetch.done = ids.length - missing.length
+        log(`prefetch ${kind}: ${missing.length} of ${ids.length} images missing`)
+        for (const id of missing) {
+          if (stopped) return
+          // Browser requests go first: idle until nothing is waiting upstream.
+          while (imageLimiter.pending > 0) await sleep(prefetchIntervalMs)
+          try {
+            await ensureImage(id, kind)
+          } catch {
+            prefetch.failed += 1
+          }
+          prefetch.done += 1
+          await sleep(prefetchIntervalMs)
+        }
+        log(`prefetch ${kind} done, ${prefetch.failed} failed`)
+      }
+    } finally {
+      prefetch.running = false
+    }
   }
 
   const images: ApiHandler = async (req, res) => {

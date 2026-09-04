@@ -72,7 +72,12 @@ copy of the full card database (`cardinfo.php?misc=yes`, ~25 MB, 14.5k cards)
 in `<cache>/cards.json`, re-checks `checkDBVer.php` once a day and only
 re-downloads when the database version changed. Card images are fetched on
 first view, stored under `<cache>/images/` and served with immutable cache
-headers. Upstream requests are throttled to ~3/s. This is what the
+headers. API calls are throttled to 3/s and image downloads to 4 in flight
+(~8/s); once the dump is loaded the server also warms the small-image cache in
+the background (one image every 500 ms while no browser request is waiting,
+about 2 h for the whole database), so cold starts stop hurting after the first
+hours of uptime. `GET /api/cards/status` reports the prefetch progress. This
+is what the
 [YGOPRODeck API guide](https://ygoprodeck.com/api-guide/) asks for: no request
 bursts (limit 20/s, then a one-hour ban) and no image hotlinking.
 
