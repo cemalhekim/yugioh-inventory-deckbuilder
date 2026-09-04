@@ -1409,6 +1409,36 @@ function App() {
     setDeckContextMenu({ fileName, ...toShellPoint(event.clientX, event.clientY) })
   }
 
+  // Add every card of a .ydk (main, extra and side) to the inventory, one
+  // copy per listed line, so a physical deck can be inventoried in one go.
+  async function importDeckListToInventory(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setStatus(`Adding ${file.name} to inventory...`)
+    try {
+      const parsed = parseYdk(await file.text())
+      const allIds = [...parsed.main, ...parsed.extra, ...parsed.side]
+      const copiesById = new Map<number, number>()
+      for (const id of allIds) copiesById.set(id, (copiesById.get(id) ?? 0) + 1)
+      const cardsById = await fetchCardsByIds(allIds)
+
+      setInventory((current) => {
+        let next = current
+        for (const [id, copies] of copiesById) {
+          const card = cardsById.get(id)
+          if (card) next = upsertEntry(next, card, copies)
+        }
+        return next.sort((a, b) => a.card.name.localeCompare(b.card.name))
+      })
+      setStatus(`Added ${allIds.length} cards (${copiesById.size} different) from ${file.name} to inventory.`)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Deck list import failed.')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
   async function importYdk(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
@@ -1436,18 +1466,6 @@ function App() {
     } finally {
       event.target.value = ''
     }
-  }
-
-  function exportBackup() {
-    const blob = new Blob([JSON.stringify({ inventory, deck, deckName }, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'ygo-inventory-backup.json'
-    link.click()
-    URL.revokeObjectURL(url)
   }
 
   const saveRepoBackup = useCallback(async (quiet = false) => {
@@ -1496,23 +1514,6 @@ function App() {
       window.removeEventListener('pagehide', flush)
     }
   }, [inventory, deck, deckName, saveRepoBackup])
-
-  async function importBackup(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    try {
-      const parsed = JSON.parse(await file.text()) as PersistedState
-      setInventory(parsed.inventory ?? [])
-      setDeck(sortDeckState({ ...emptyDeck, ...parsed.deck }))
-      setDeckName(parsed.deckName ?? 'Imported Deck')
-      setStatus('Backup imported.')
-    } catch {
-      setStatus('Backup import failed.')
-    } finally {
-      event.target.value = ''
-    }
-  }
 
   return (
     <div className="app-viewport">
@@ -1656,19 +1657,18 @@ function App() {
             <span>
               {visibleResults.length} cards
               {lastSavedAt
-                ? ` · saved ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                ? ` · autosaved ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                 : ''}
             </span>
-            <div className="row-actions">
-              <button type="button" onClick={() => void saveRepoBackup()}>
-                Save
-              </button>
-              <button type="button" onClick={exportBackup}>Backup</button>
-              <label className="file-button">
-                Restore
-                <input type="file" accept="application/json" onChange={importBackup} hidden />
-              </label>
-            </div>
+            <label className="file-button" title="Add every card of a .ydk deck list to your inventory">
+              Import deck list
+              <input
+                type="file"
+                accept=".ydk,text/plain"
+                onChange={importDeckListToInventory}
+                hidden
+              />
+            </label>
           </div>
         </section>
 
