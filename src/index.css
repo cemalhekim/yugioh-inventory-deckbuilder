@@ -14,9 +14,20 @@
   box-sizing: border-box;
 }
 
+/* One screen, no page scroll: the app scales itself to the window. */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   min-width: 320px;
+  position: fixed;
+  inset: 0;
 }
 
 input,

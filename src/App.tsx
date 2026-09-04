@@ -8,6 +8,8 @@ import {
   toSvgPath,
 } from '@gitgraph/core'
 import './App.css'
+import { FitGrid } from './FitGrid.tsx'
+import { useAppScale, useScrollLock } from './useViewport.ts'
 
 type DeckZone = 'main' | 'extra' | 'side'
 type DeckViewMode = 'list' | 'cards'
@@ -473,6 +475,18 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
   const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
+  const shellRef = useRef<HTMLElement>(null)
+  const appScale = useAppScale()
+  useScrollLock()
+
+  // Pointer coordinates arrive in window pixels; fixed-position menus inside
+  // the scaled shell need them in the shell's own (design) pixels.
+  function toShellPoint(clientX: number, clientY: number) {
+    const shell = shellRef.current
+    if (!shell) return { x: clientX, y: clientY }
+    const rect = shell.getBoundingClientRect()
+    return { x: (clientX - rect.left) / appScale, y: (clientY - rect.top) / appScale }
+  }
 
   useEffect(() => {
     let canceled = false
@@ -1225,8 +1239,7 @@ function App() {
     setDeckContextMenu(null)
     setVersionContextMenu({
       version,
-      x: event.clientX,
-      y: event.clientY,
+      ...toShellPoint(event.clientX, event.clientY),
     })
   }
 
@@ -1415,7 +1428,7 @@ function App() {
   function openDeckContextMenu(event: MouseEvent<HTMLButtonElement>, fileName: string) {
     event.preventDefault()
     setVersionContextMenu(null)
-    setDeckContextMenu({ fileName, x: event.clientX, y: event.clientY })
+    setDeckContextMenu({ fileName, ...toShellPoint(event.clientX, event.clientY) })
   }
 
   async function importYdk(event: ChangeEvent<HTMLInputElement>) {
@@ -1494,7 +1507,12 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <div className="app-viewport">
+    <main
+      className="app-shell"
+      ref={shellRef}
+      style={{ ['--app-scale' as string]: appScale }}
+    >
       <header className="topbar">
         <div className="brand-block">
           <img className="kc-emblem" src="/kaibacorp-logo.png" alt="" aria-hidden="true" />
@@ -1613,7 +1631,7 @@ function App() {
                   List Inventory
                 </button>
               </div>
-              <div className="result-list">
+              <div className="result-list" data-scroll>
                 {isSearching ? <p className="muted">Searching...</p> : null}
                 {visibleResults.map((card) => (
                   <article className="card-result" key={card.id}>
@@ -1661,7 +1679,7 @@ function App() {
                   <input type="file" accept="application/json" onChange={importBackup} hidden />
                 </label>
               </div>
-              <div className="inventory-list">
+              <div className="inventory-list" data-scroll>
                 {inventory.length ? (
                   inventory.map((entry) => (
                     <div className="line-item inventory-item" key={entry.card.id}>
@@ -1723,7 +1741,7 @@ function App() {
             </select>
           </div>
           <div className="set-browser">
-            <div className="set-list">
+            <div className="set-list" data-scroll>
               {filteredSets.map((set) => (
                 <button
                   className={selectedSet?.set_name === set.set_name ? 'selected' : ''}
@@ -1739,7 +1757,7 @@ function App() {
                 </button>
               ))}
             </div>
-            <div className="set-card-list">
+            <div className="set-card-list" data-scroll>
               {selectedSet ? (
                 <div className="set-summary">
                   <div>
@@ -1847,7 +1865,13 @@ function App() {
                 </h3>
                 {deck[zone].length ? (
                   deckViewMode === 'cards' ? (
-                    <div className="deck-card-grid">
+                    <FitGrid
+                      className="deck-card-grid"
+                      count={deck[zone].reduce((sum, entry) => sum + entry.quantity, 0)}
+                      gap={6}
+                      itemAspect={0.686}
+                      mode="cards"
+                    >
                       {deck[zone].flatMap((entry) =>
                         Array.from({ length: entry.quantity }, (_, copyIndex) => (
                           <article className="deck-card" key={`${entry.card.id}-${copyIndex}`}>
@@ -1867,9 +1891,17 @@ function App() {
                           </article>
                         )),
                       )}
-                    </div>
+                    </FitGrid>
                   ) : (
-                    deck[zone].map((entry) => (
+                    <FitGrid
+                      className="deck-list-grid"
+                      count={deck[zone].length}
+                      gap={0}
+                      minColumnWidth={210}
+                      mode="rows"
+                      rowHeight={34}
+                    >
+                    {deck[zone].map((entry) => (
                       <div className="line-item deck-list-item" key={entry.card.id}>
                         <img
                           className="line-thumb"
@@ -1885,7 +1917,8 @@ function App() {
                           owned {inventoryById.get(entry.card.id) ?? 0}
                         </small>
                       </div>
-                    ))
+                    ))}
+                    </FitGrid>
                   )
                 ) : (
                   <p className="empty-state">No cards yet.</p>
@@ -1910,7 +1943,7 @@ function App() {
               </button>
             </div>
           </div>
-          <div className="kaiba-deck-list">
+          <div className="kaiba-deck-list" data-scroll>
             {kaibaDecks.length ? (
               kaibaDecks.map((deckFile) => (
                 <div
@@ -1938,7 +1971,7 @@ function App() {
             )}
           </div>
           {selectedKaibaDeck ? (
-            <div className="deck-history">
+            <div className="deck-history" data-scroll>
               <div className="deck-history-heading">
                 <strong>{selectedKaibaDeck} history</strong>
                 <span>{deckHistory.length} versions</span>
@@ -2291,6 +2324,7 @@ function App() {
         </div>
       ) : null}
     </main>
+    </div>
   )
 }
 
