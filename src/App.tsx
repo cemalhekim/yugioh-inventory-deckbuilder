@@ -2214,13 +2214,11 @@ function App() {
                     >
                       <div>
                         <strong>
-                          {version.branchName ? `branch: ${version.branchName}` : version.source}
+                          {version.note?.trim() || new Date(version.createdAt).toLocaleString()}
                         </strong>
-                        <span>{new Date(version.createdAt).toLocaleString()}</span>
+                        {version.branchName ? <span>branch: {version.branchName}</span> : null}
                       </div>
-                      <span className="deck-history-note">
-                        {version.note?.trim() || version.hash || ''}
-                      </span>
+                      <span className="deck-history-note">{version.source}</span>
                     </div>
                   )
                 })
