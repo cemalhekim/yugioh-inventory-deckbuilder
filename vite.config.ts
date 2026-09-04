@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { createApi, type ApiHandler } from './server/api.ts'
+import { createCardDb } from './server/cardDb.ts'
 
 // Desktop/dev mode: the repository is the source of truth for decks and the
 // app state, the simulator deck folder is mirrored, and OS folder pickers and
@@ -19,6 +20,9 @@ const api = createApi({
     (process.platform === 'win32' ? 'C:\\Yu-Gi-Oh! The Dawn of a New Era' : process.cwd()),
   hosted: false,
 })
+// Card dump + image cache: data/.cache in dev (data/ is gitignored).
+const cardDb = createCardDb({ cacheDir: path.resolve(process.cwd(), 'data', '.cache') })
+let cardDbStarted = false
 
 function apiPlugin(name: string, prefix: string, handler: ApiHandler): Plugin {
   return {
@@ -35,6 +39,17 @@ function apiPlugin(name: string, prefix: string, handler: ApiHandler): Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    {
+      name: 'card-db-start',
+      configureServer() {
+        if (!cardDbStarted) {
+          cardDbStarted = true
+          void cardDb.start()
+        }
+      },
+    },
+    apiPlugin('card-db-api', '/api/cards', cardDb.cards),
+    apiPlugin('card-images-api', '/api/images', cardDb.images),
     apiPlugin('kaibapro-decks-api', '/api/kaibapro/decks', api.decks),
     apiPlugin('repo-app-state-api', '/api/app-state', api.appState),
     apiPlugin('ygopro-launcher-api', '/api/ygopro', api.simulator),

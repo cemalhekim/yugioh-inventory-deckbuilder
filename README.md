@@ -46,6 +46,7 @@ against a single data directory (`/data`, bind-mounted from `/srv/data/ygo`):
 /srv/data/ygo/decks/                 .ydk files, source of truth
 /srv/data/ygo/decks/.history/        per-deck version snapshots
 /srv/data/ygo/inventory-backup.json  inventory + current deck
+/srv/data/ygo/.cache/                card dump + image cache (see below)
 ```
 
 That directory is also mounted into Nextcloud as the `YuGiOh` folder, so it
@@ -63,6 +64,36 @@ docker run --rm -p 3010:3000 -v /srv/data/ygo:/data --user 33:33 ygo-deckbuilder
 
 `decks/` and `data/` are no longer tracked in git: the server copy is canonical
 and Nextcloud carries it to desktops.
+
+## Card data and images (YGOPRODeck mirror)
+
+The browser never talks to YGOPRODeck directly. `server/cardDb.ts` keeps one
+copy of the full card database (`cardinfo.php?misc=yes`, ~25 MB, 14.5k cards)
+in `<cache>/cards.json`, re-checks `checkDBVer.php` once a day and only
+re-downloads when the database version changed. Card images are fetched on
+first view, stored under `<cache>/images/` and served with immutable cache
+headers. Upstream requests are throttled to ~3/s. This is what the
+[YGOPRODeck API guide](https://ygoprodeck.com/api-guide/) asks for: no request
+bursts (limit 20/s, then a one-hour ban) and no image hotlinking.
+
+```
+GET /api/cards?ids=1,2,3     cards by passcode; alt-art ids map to the canonical card
+GET /api/cards?names=a|b     cards by exact name
+GET /api/cards?q=blue-eyes   name search, first 500 + total
+GET /api/cards?set=Set Name  cards printed in a set
+GET /api/cards/sets          cardsets.php mirror
+GET /api/cards/status        loaded, version, count, source (local | upstream)
+GET /api/images/<id>/<kind>  kind: small | full | cropped
+```
+
+Until the dump is on disk (first start, offline) the same queries are proxied
+upstream as single batched requests, so the app works immediately. The cache
+directory is `<data>/.cache` (hosted: `/srv/data/ygo/.cache`, dev:
+`data/.cache`); hidden so a Nextcloud client sharing the data folder does not
+sync it. Point it elsewhere with `YGO_CACHE_DIR`. Loading the dump keeps the
+server at roughly 250 MB RSS.
+
+Card data and images courtesy of YGOPRODeck.
 
 When running through the Vite dev server, the app first checks for
 `data/inventory-backup.json`. If that repository backup exists, it loads the

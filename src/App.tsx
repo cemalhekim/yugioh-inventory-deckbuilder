@@ -21,7 +21,7 @@ type YgoCard = {
   scale?: number
   linkval?: number
   archetype?: string
-  card_images?: { image_url: string; image_url_small: string; image_url_cropped?: string }[]
+  card_images?: { id?: number; image_url: string; image_url_small: string; image_url_cropped?: string }[]
 }
 
 type YgoSet = {
@@ -214,10 +214,40 @@ function loadState(): PersistedState {
   }
 }
 
-function normalizeState(state: Partial<PersistedState>): PersistedState {
+// Cards saved before the local image cache existed still point at
+// images.ygoprodeck.com; rewrite them so nothing hotlinks upstream.
+function localizeCardImages(card: YgoCard): YgoCard {
+  const images = card.card_images
+  if (!images?.length || images.every((image) => image.image_url.startsWith('/api/images/'))) {
+    return card
+  }
   return {
-    inventory: state.inventory ?? [],
-    deck: sortDeckState({ ...emptyDeck, ...state.deck }),
+    ...card,
+    card_images: images.map((image) => {
+      const id = image.id ?? (Number(image.image_url.match(/(\d+)\.jpg$/)?.[1]) || card.id)
+      return {
+        id,
+        image_url: `/api/images/${id}/full`,
+        image_url_small: `/api/images/${id}/small`,
+        image_url_cropped: `/api/images/${id}/cropped`,
+      }
+    }),
+  }
+}
+
+function localizeEntries<T extends { card: YgoCard }>(entries: T[]): T[] {
+  return entries.map((entry) => ({ ...entry, card: localizeCardImages(entry.card) }))
+}
+
+function normalizeState(state: Partial<PersistedState>): PersistedState {
+  const deck = { ...emptyDeck, ...state.deck }
+  return {
+    inventory: localizeEntries(state.inventory ?? []),
+    deck: sortDeckState({
+      main: localizeEntries(deck.main),
+      extra: localizeEntries(deck.extra),
+      side: localizeEntries(deck.side),
+    }),
     deckName: state.deckName ?? 'Untitled Deck',
   }
 }
@@ -347,20 +377,31 @@ function makeEntriesFromCards(cards: YgoCard[], zone: DeckZone) {
   )
 }
 
+// Card data comes from this server's YGOPRODeck mirror (server/cardDb.ts):
+// one request per batch instead of one per card, and images are served from
+// the local cache, which is what YGOPRODeck's API rules require.
+const cardApi = '/api/cards'
+const cardsPerRequest = 200
+
 async function fetchCardsByIds(ids: number[]) {
   const uniqueIds = Array.from(new Set(ids))
-  const cards = await Promise.all(
-    uniqueIds.map(async (id) => {
-      const response = await fetch(
-        `https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${id}`,
-      )
-      if (!response.ok) throw new Error(`Could not load card ${id}`)
-      const payload = (await response.json()) as { data: YgoCard[] }
-      return payload.data[0]
-    }),
-  )
-
-  return new Map(cards.map((card) => [card.id, card]))
+  const cardsById = new Map<number, YgoCard>()
+  for (let start = 0; start < uniqueIds.length; start += cardsPerRequest) {
+    const chunk = uniqueIds.slice(start, start + cardsPerRequest)
+    const response = await fetch(`${cardApi}?ids=${chunk.join(',')}`)
+    if (!response.ok) throw new Error(`Could not load ${chunk.length} cards.`)
+    const payload = (await response.json()) as {
+      data: YgoCard[]
+      aliases: Record<string, number>
+    }
+    for (const card of payload.data) cardsById.set(card.id, card)
+    // Alternate-art passcodes in a .ydk resolve to the canonical card.
+    for (const [requested, canonical] of Object.entries(payload.aliases ?? {})) {
+      const card = cardsById.get(canonical)
+      if (card) cardsById.set(Number(requested), card)
+    }
+  }
+  return cardsById
 }
 
 // A pasted deck list: .ydk id lines and/or name lines such as "3x Blue-Eyes
@@ -398,21 +439,22 @@ function parseDeckListText(text: string) {
 async function fetchCardsByNames(names: string[]) {
   const found = new Map<string, YgoCard>()
   const missing: string[] = []
-  await Promise.all(
-    names.map(async (name) => {
-      const response = await fetch(
-        `https://db.ygoprodeck.com/api/v7/cardinfo.php?name=${encodeURIComponent(name)}`,
-      )
-      if (!response.ok) {
-        missing.push(name)
-        return
-      }
-      const payload = (await response.json()) as { data?: YgoCard[] }
-      const card = payload.data?.[0]
-      if (card) found.set(name, card)
-      else missing.push(name)
-    }),
-  )
+  for (let start = 0; start < names.length; start += 50) {
+    const chunk = names.slice(start, start + 50)
+    const response = await fetch(
+      `${cardApi}?names=${encodeURIComponent(chunk.join('|'))}`,
+    )
+    if (!response.ok) {
+      missing.push(...chunk)
+      continue
+    }
+    const payload = (await response.json()) as {
+      found: Record<string, YgoCard>
+      missing: string[]
+    }
+    for (const [name, card] of Object.entries(payload.found)) found.set(name, card)
+    missing.push(...payload.missing)
+  }
   return { found, missing }
 }
 
@@ -622,10 +664,7 @@ function App() {
 
     async function loadSets() {
       try {
-        const response = await fetch(
-          'https://db.ygoprodeck.com/api/v7/cardsets.php',
-          { signal: controller.signal },
-        )
+        const response = await fetch(`${cardApi}/sets`, { signal: controller.signal })
         if (!response.ok) throw new Error('Could not load product catalog.')
         const payload = (await response.json()) as YgoSet[]
         setSets(payload)
@@ -653,17 +692,18 @@ function App() {
       setIsSearching(true)
       try {
         const response = await fetch(
-          `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(trimmed)}`,
+          `${cardApi}?q=${encodeURIComponent(trimmed)}`,
           { signal: controller.signal },
         )
-        if (!response.ok) throw new Error('No cards found')
-        const payload = (await response.json()) as { data: YgoCard[] }
+        if (!response.ok) throw new Error('Search failed.')
+        const payload = (await response.json()) as { data: YgoCard[]; total: number }
+        if (payload.total === 0) throw new Error('No cards found')
         const sorted = sortSearchCards(payload.data)
         setResults(sorted.slice(0, maxSearchResults))
         setStatus(
-          sorted.length > maxSearchResults
-            ? `Found ${sorted.length} matching cards, showing the first ${maxSearchResults}. Narrow the search for the rest.`
-            : `Found ${sorted.length} matching cards.`,
+          payload.total > maxSearchResults
+            ? `Found ${payload.total} matching cards, showing the first ${maxSearchResults}. Narrow the search for the rest.`
+            : `Found ${payload.total} matching cards.`,
         )
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -1077,11 +1117,10 @@ function App() {
     setProductStatus(`Loading ${set.set_name}...`)
 
     try {
-      const response = await fetch(
-        `https://db.ygoprodeck.com/api/v7/cardinfo.php?cardset=${encodeURIComponent(set.set_name)}`,
-      )
-      if (!response.ok) throw new Error(`No cards found for ${set.set_name}.`)
+      const response = await fetch(`${cardApi}?set=${encodeURIComponent(set.set_name)}`)
+      if (!response.ok) throw new Error(`Could not load ${set.set_name}.`)
       const payload = (await response.json()) as { data: YgoCard[] }
+      if (payload.data.length === 0) throw new Error(`No cards found for ${set.set_name}.`)
       const cards = payload.data.sort((a, b) => a.name.localeCompare(b.name))
       setSelectedSetCards(cards)
       setProductStatus(`${set.set_name}: ${cards.length} listed cards.`)
@@ -1790,7 +1829,10 @@ function App() {
           <img className="kc-emblem" src="/kaibacorp-logo.png" alt="" aria-hidden="true" />
           <div>
             <h1>KaibaCorp Deck Command</h1>
-            <p className="tagline">Build from what you own. Buy only what is missing.</p>
+            <p className="tagline">
+              Build from what you own. Buy only what is missing.
+              <span className="credit"> Card data and images courtesy of YGOPRODeck.</span>
+            </p>
           </div>
         </div>
         <div className="topbar-actions">

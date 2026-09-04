@@ -2,6 +2,8 @@
 // same API the Vite dev server exposes, against a single data directory.
 //
 //   YGO_DATA_DIR  (default /data)   decks/ + inventory-backup.json live here
+//   YGO_CACHE_DIR (default <data>/.cache)  card dump + image cache; hidden so
+//                 a Nextcloud client sharing the data folder skips it
 //   PORT          (default 3000)
 //
 // Runs directly under Node >= 22.18 (type stripping), no build step.
@@ -9,12 +11,14 @@ import fs from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
 import { createApi, type ApiHandler } from './api.ts'
+import { createCardDb } from './cardDb.ts'
 
 const port = Number(process.env.PORT ?? 3000)
 const dataDir = path.resolve(process.env.YGO_DATA_DIR ?? '/data')
 const appRoot = path.resolve(import.meta.dirname, '..')
 const distDir = path.resolve(process.env.YGO_DIST_DIR ?? path.join(appRoot, 'dist'))
 const deckDir = path.join(dataDir, 'decks')
+const cacheDir = path.resolve(process.env.YGO_CACHE_DIR ?? path.join(dataDir, '.cache'))
 
 const api = createApi({
   deckDir,
@@ -24,8 +28,11 @@ const api = createApi({
   simulatorDir: dataDir,
   hosted: true,
 })
+const cardDb = createCardDb({ cacheDir })
 
 const routes: Array<[string, ApiHandler]> = [
+  ['/api/cards', cardDb.cards],
+  ['/api/images', cardDb.images],
   ['/api/kaibapro/decks', api.decks],
   ['/api/app-state', api.appState],
   ['/api/ygopro', api.simulator],
@@ -126,6 +133,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 await fs.mkdir(deckDir, { recursive: true })
+await cardDb.start()
 server.listen(port, '0.0.0.0', () => {
-  console.log(`ygo deckbuilder listening on :${port}, data in ${dataDir}, dist ${distDir}`)
+  console.log(`ygo deckbuilder listening on :${port}, data in ${dataDir}, cache in ${cacheDir}, dist ${distDir}`)
 })

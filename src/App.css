@@ -1435,3 +1435,8 @@ button:disabled {
   grid-column: 1 / -1;
   justify-self: end;
 }
+
+.tagline .credit {
+  opacity: 0.55;
+  font-size: 0.85em;
+}
