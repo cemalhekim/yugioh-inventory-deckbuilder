@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, MouseEvent } from 'react'
-import {
-  GitgraphCore,
-  MergeStyle,
-  TemplateName,
-  templateExtend,
-  toSvgPath,
-} from '@gitgraph/core'
 import './App.css'
 import { FitGrid } from './FitGrid.tsx'
 import { useAppScale, useScrollLock } from './useViewport.ts'
@@ -15,7 +8,6 @@ type DeckZone = 'main' | 'extra' | 'side'
 type DeckViewMode = 'list' | 'cards'
 type AppPage = 'deck' | 'products'
 type SearchPanelView = 'search' | 'inventory'
-type SearchResultSource = 'search' | 'inventory'
 
 type YgoCard = {
   id: number
@@ -81,6 +73,7 @@ type PersistedState = {
 const STORAGE_KEY = 'ygo-inventory-deckbuilder-v1'
 const KAIBAPRO_DECK_DIR_KEY = 'kaibapro-deck-dir-v1'
 const SIMULATOR_APP_DIR_KEY = 'simulator-app-dir-v1'
+const INVENTORY_ONLY_KEY = 'inventory-only-v1'
 const maxDeckCopies = 3
 const deckZoneLimits: Record<DeckZone, number> = {
   main: 60,
@@ -104,27 +97,6 @@ const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 const cardmarketPayloadHashKey = 'ygo-inventory-wants'
 const cardDragDataType = 'application/ygo-card'
-const historyRowHeight = 72
-const historyLaneWidth = 34
-const historyLaneStart = 18
-const historyGraphInset = 26
-const historyGraphYOffset = historyRowHeight / 2
-const historyLaneColors = ['#39c8ff', '#f7d45c', '#e218a9', '#18df35', '#f0a21b', '#9f22ff']
-const historyGraphTemplate = templateExtend(TemplateName.Metro, {
-  colors: historyLaneColors,
-  branch: {
-    lineWidth: 4,
-    mergeStyle: MergeStyle.Bezier,
-    spacing: historyLaneWidth,
-    label: { display: false },
-  },
-  commit: {
-    spacing: historyRowHeight,
-    message: { display: false, displayAuthor: false, displayHash: false },
-    dot: { size: 12, strokeWidth: 3, strokeColor: '#07101f' },
-  },
-})
-
 function isExtraDeckCard(card: YgoCard) {
   return ['Fusion', 'Synchro', 'XYZ', 'Xyz', 'Link'].some((type) =>
     card.type.includes(type),
@@ -431,7 +403,11 @@ function App() {
   const [previewCard, setPreviewCard] = useState<YgoCard | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YgoCard[]>([])
-  const [searchResultSource, setSearchResultSource] = useState<SearchResultSource>('search')
+  // Toggle: browse only the cards you own, filtered by the search box.
+  const [inventoryOnly, setInventoryOnly] = useState(() => {
+    if (new URLSearchParams(window.location.search).get('inventory') === '1') return true
+    return localStorage.getItem(INVENTORY_ONLY_KEY) === '1'
+  })
   const [status, setStatus] = useState('Search for a card to start building.')
   const [isSearching, setIsSearching] = useState(false)
   const [sets, setSets] = useState<YgoSet[]>([])
@@ -587,7 +563,7 @@ function App() {
 
   useEffect(() => {
     const trimmed = query.trim()
-    if (trimmed.length < 2) return
+    if (trimmed.length < 2 || inventoryOnly) return
 
     const controller = new AbortController()
     const timeout = window.setTimeout(async () => {
@@ -599,7 +575,6 @@ function App() {
         )
         if (!response.ok) throw new Error('No cards found')
         const payload = (await response.json()) as { data: YgoCard[] }
-        setSearchResultSource('search')
         setResults(sortSearchCards(payload.data).slice(0, 20))
         setStatus(`Found ${payload.data.length} matching cards.`)
       } catch (error) {
@@ -616,11 +591,11 @@ function App() {
       controller.abort()
       window.clearTimeout(timeout)
     }
-  }, [query])
+  }, [query, inventoryOnly])
 
   function updateQuery(value: string) {
     setQuery(value)
-    setSearchResultSource('search')
+    if (inventoryOnly) return
     if (value.trim().length < 2) {
       setResults([])
       setStatus('Search for a card to start building.')
@@ -631,7 +606,12 @@ function App() {
     return new Map(inventory.map((entry) => [entry.card.id, entry.quantity]))
   }, [inventory])
 
-  const visibleResults = results
+  const visibleResults = useMemo(() => {
+    if (!inventoryOnly) return results
+    const needle = query.trim().toLowerCase()
+    const owned = sortSearchCards(inventory.map((entry) => entry.card))
+    return needle ? owned.filter((card) => card.name.toLowerCase().includes(needle)) : owned
+  }, [inventory, inventoryOnly, query, results])
 
   const deckTotals = useMemo(() => {
     const totals = new Map<number, { card: YgoCard; quantity: number }>()
@@ -679,88 +659,6 @@ function App() {
         : '',
     [activeDeckContentHash, deckHistory],
   )
-
-  const deckHistoryGraph = useMemo(() => {
-    const branchNames = Array.from(
-      new Set(deckHistory.map((version) => version.branchName).filter(Boolean) as string[]),
-    )
-    const graph = new GitgraphCore({
-      branchLabelOnEveryCommit: false,
-      commitMessage: '',
-      template: historyGraphTemplate,
-    })
-    const gitgraph = graph.getUserApi()
-    const chronologicalHistory = [...deckHistory].reverse()
-    const branches = new Map<string, ReturnType<typeof gitgraph.branch>>()
-    const commitHashesByVersionId = new Map<string, string>()
-    const main = gitgraph.branch('main')
-    branches.set('main', main)
-
-    for (const version of chronologicalHistory) {
-      const commitHash = version.hash || version.id.replace(/\.ydk$/i, '')
-      const subject = version.branchName ? `branch: ${version.branchName}` : version.source
-
-      if (!version.branchName) {
-        main.commit({ hash: commitHash, subject })
-        commitHashesByVersionId.set(version.id, commitHash)
-        continue
-      }
-
-      const parentHash = version.parentId
-        ? commitHashesByVersionId.get(version.parentId)
-        : undefined
-      const branchName = version.branchName
-      const branch =
-        branches.get(branchName) ??
-        gitgraph.branch({
-          from: parentHash ?? main,
-          name: branchName,
-        })
-
-      branches.set(branchName, branch)
-      branch.commit({ hash: commitHash, subject })
-      commitHashesByVersionId.set(version.id, commitHash)
-    }
-
-    const rendered = graph.getRenderedData()
-    const versionByHash = new Map(
-      deckHistory.map((version) => [
-        version.hash || version.id.replace(/\.ydk$/i, ''),
-        version,
-      ]),
-    )
-    const commits = rendered.commits.map((commit) => {
-      const version = versionByHash.get(commit.hash)
-      return {
-        color: commit.style.color ?? historyLaneColors[0],
-        hash: commit.hash,
-        isActive: version?.id === activeDeckVersionId,
-        x: commit.x,
-        y: commit.y,
-      }
-    })
-    const rows = [...commits]
-      .sort((a, b) => a.y - b.y)
-      .map((commit) => versionByHash.get(commit.hash))
-      .filter((version): version is DeckVersion => Boolean(version))
-    const paths = Array.from(rendered.branchesPaths).map(([branch, coordinates]) => ({
-      color: branch.style.color ?? historyLaneColors[0],
-      d: toSvgPath(coordinates, true, true),
-    }))
-    const maxX = Math.max(...commits.map((commit) => commit.x), 0)
-    const maxY = Math.max(...commits.map((commit) => commit.y), 0)
-
-    return {
-      commits,
-      graphHeight: maxY + historyRowHeight,
-      graphWidth: Math.max(
-        historyLaneStart + Math.max(branchNames.length, 1) * historyLaneWidth + 42,
-        maxX + historyGraphInset * 2 + 24,
-      ),
-      paths,
-      rows,
-    }
-  }, [activeDeckVersionId, deckHistory])
 
   const filteredSets = useMemo(() => {
     const normalizedQuery = productQuery.trim().toLowerCase()
@@ -1170,12 +1068,56 @@ function App() {
     }
   }
 
-  function listInventoryCards() {
-    setQuery('')
-    setSearchResultSource('inventory')
-    const cards = sortSearchCards(inventory.map((entry) => entry.card))
-    setResults(cards)
-    setStatus(`Listed ${cards.length} inventory cards.`)
+  function toggleInventoryOnly() {
+    const next = !inventoryOnly
+    setInventoryOnly(next)
+    localStorage.setItem(INVENTORY_ONLY_KEY, next ? '1' : '0')
+    setStatus(
+      next
+        ? `Browsing ${inventory.length} owned cards. Search filters your inventory.`
+        : 'Search for a card to start building.',
+    )
+  }
+
+  function renderCardTile(card: YgoCard) {
+    const owned = inventoryById.get(card.id) ?? 0
+    return (
+      <article className="card-tile" key={card.id}>
+        <img
+          src={card.card_images?.[0]?.image_url_small}
+          alt={card.name}
+          draggable
+          title="Right-click: add to deck. Shift+right-click: side deck. Drag to a zone."
+          onDragStart={(event) => handleSearchCardDragStart(event, card)}
+          onDragEnd={handleSearchCardDragEnd}
+          onClick={() => setPreviewCard(card)}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            if (event.shiftKey) addToSideDeck(card)
+            else addToDeck(card)
+          }}
+        />
+        {owned > 0 ? <span className="card-tile-count">x{owned}</span> : null}
+        <div className="card-tile-actions">
+          <button
+            type="button"
+            title="Add one to inventory"
+            onClick={() => addToInventory(card, 1)}
+          >
+            +
+          </button>
+          {owned > 0 ? (
+            <button
+              type="button"
+              title="Remove one from inventory"
+              onClick={() => addToInventory(card, -1)}
+            >
+              −
+            </button>
+          ) : null}
+        </div>
+      </article>
+    )
   }
 
   async function openKaibaDeck(fileName: string) {
@@ -1627,44 +1569,18 @@ function App() {
                 placeholder="Search by card name"
               />
               <div className="search-tools">
-                <button type="button" onClick={listInventoryCards} disabled={isSearching}>
-                  List Inventory
+                <button
+                  type="button"
+                  className={inventoryOnly ? 'active' : ''}
+                  onClick={toggleInventoryOnly}
+                >
+                  {inventoryOnly ? 'Inventory only: on' : 'Inventory only'}
                 </button>
+                <span>{visibleResults.length} cards</span>
               </div>
-              <div className="result-list" data-scroll>
+              <div className="card-tile-grid" data-scroll>
                 {isSearching ? <p className="muted">Searching...</p> : null}
-                {visibleResults.map((card) => (
-                  <article className="card-result" key={card.id}>
-                    <img
-                      src={card.card_images?.[0]?.image_url_small}
-                      alt=""
-                      draggable
-                      title="Drag to Main, Extra, or Side Deck."
-                      onDragStart={(event) => handleSearchCardDragStart(event, card)}
-                      onDragEnd={handleSearchCardDragEnd}
-                      onClick={() => setPreviewCard(card)}
-                    />
-                    <div className="clickable-card-text" onClick={() => setPreviewCard(card)}>
-                      <strong>{card.name}</strong>
-                      <span>
-                        {card.type}
-                      </span>
-                    </div>
-                    <div className="row-actions">
-                      {searchResultSource === 'search' ? (
-                        <button type="button" onClick={() => addToInventory(card)}>
-                          + Inv
-                        </button>
-                      ) : null}
-                      <button type="button" onClick={() => addToDeck(card)}>
-                        + Deck
-                      </button>
-                      <button type="button" onClick={() => addToSideDeck(card)}>
-                        + Side
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                {visibleResults.map((card) => renderCardTile(card))}
               </div>
             </>
           ) : (
@@ -1679,28 +1595,11 @@ function App() {
                   <input type="file" accept="application/json" onChange={importBackup} hidden />
                 </label>
               </div>
-              <div className="inventory-list" data-scroll>
+              <div className="card-tile-grid" data-scroll>
                 {inventory.length ? (
-                  inventory.map((entry) => (
-                    <div className="line-item inventory-item" key={entry.card.id}>
-                      <img
-                        className="line-thumb"
-                        src={entry.card.card_images?.[0]?.image_url_small}
-                        alt=""
-                        onClick={() => setPreviewCard(entry.card)}
-                      />
-                      <span>{entry.quantity}x</span>
-                      <strong onClick={() => setPreviewCard(entry.card)}>
-                        {entry.card.name}
-                      </strong>
-                      <button type="button" onClick={() => addToInventory(entry.card, 1)}>
-                        +
-                      </button>
-                      <button type="button" onClick={() => addToInventory(entry.card, -1)}>
-                        -
-                      </button>
-                    </div>
-                  ))
+                  sortSearchCards(inventory.map((entry) => entry.card)).map((card) =>
+                    renderCardTile(card),
+                  )
                 ) : (
                   <p className="empty-state">Add cards from search results.</p>
                 )}
@@ -1977,81 +1876,42 @@ function App() {
                 <span>{deckHistory.length} versions</span>
               </div>
               {deckHistory.length ? (
-                <div
-                  className="deck-history-graph"
-                  style={{
-                    ['--history-graph-width' as string]: `${deckHistoryGraph.graphWidth}px`,
-                  }}
-                >
-                  <svg
-                    aria-hidden="true"
-                    className="deck-history-lines"
-                    height={deckHistoryGraph.graphHeight}
-                    viewBox={`0 0 ${deckHistoryGraph.graphWidth} ${deckHistoryGraph.graphHeight}`}
-                    width={deckHistoryGraph.graphWidth}
-                  >
-                    <g transform={`translate(${historyGraphInset}, ${historyGraphYOffset})`}>
-                      {deckHistoryGraph.paths.map((path) => (
-                        <path d={path.d} key={`${path.color}-${path.d}`} stroke={path.color} />
-                      ))}
-                      {deckHistoryGraph.commits.map((commit) => (
-                        <circle
-                          className={commit.isActive ? 'active-history-dot' : undefined}
-                          cx={commit.x}
-                          cy={commit.y}
-                          fill="var(--kc-bg)"
-                          key={commit.hash}
-                          r={commit.isActive ? 9 : 7}
-                          stroke={commit.color}
-                        />
-                      ))}
-                    </g>
-                  </svg>
-                  {deckHistoryGraph.rows.map((version) => {
-                    const isActiveVersion = version.id === activeDeckVersionId
-                    return (
-                      <div
-                        className={[
-                          'deck-history-row',
-                          version.branchName ? 'branch-version' : '',
-                          isActiveVersion ? 'active-history-version' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        key={version.id}
-                        onContextMenu={(event) => openVersionContextMenu(event, version)}
-                        onDoubleClick={() =>
-                          void restoreDeckVersion(version.id, false, version.branchName ?? '')
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key !== 'Enter') return
-                          event.preventDefault()
-                          void restoreDeckVersion(version.id, false, version.branchName ?? '')
-                        }}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <div
-                          className="deck-history-node"
-                          aria-label="Version actions"
-                        />
-                        <div>
-                          <strong>
-                            {version.branchName
-                              ? `branch: ${version.branchName}`
-                              : version.source}
-                          </strong>
-                          <span>
-                            {version.hash || version.id}
-                          </span>
-                        </div>
-                        <span className="deck-history-note">
-                          {version.note?.trim() || new Date(version.createdAt).toLocaleString()}
-                        </span>
+                deckHistory.map((version) => {
+                  const isActiveVersion = version.id === activeDeckVersionId
+                  return (
+                    <div
+                      className={[
+                        'deck-history-row',
+                        version.branchName ? 'branch-version' : '',
+                        isActiveVersion ? 'active-history-version' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      key={version.id}
+                      onContextMenu={(event) => openVersionContextMenu(event, version)}
+                      onDoubleClick={() =>
+                        void restoreDeckVersion(version.id, false, version.branchName ?? '')
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') return
+                        event.preventDefault()
+                        void restoreDeckVersion(version.id, false, version.branchName ?? '')
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div>
+                        <strong>
+                          {version.branchName ? `branch: ${version.branchName}` : version.source}
+                        </strong>
+                        <span>{new Date(version.createdAt).toLocaleString()}</span>
                       </div>
-                    )
-                  })}
-                </div>
+                      <span className="deck-history-note">
+                        {version.note?.trim() || version.hash || ''}
+                      </span>
+                    </div>
+                  )
+                })
               ) : (
                 <p className="empty-state">No versions yet.</p>
               )}
