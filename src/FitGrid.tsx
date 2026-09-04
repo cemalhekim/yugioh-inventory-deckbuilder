@@ -6,6 +6,8 @@ type FitGridProps = {
   gap: number
   /** Never use fewer columns than this, so few items stay small instead of ballooning. */
   minColumns?: number
+  /** Alternatively: never let an item grow wider than this many pixels. */
+  maxItemWidth?: number
   className?: string
   children: ReactNode
 } & (
@@ -21,6 +23,7 @@ export function FitGrid(props: FitGridProps) {
   const [columns, setColumns] = useState(1)
   const { count, gap, className, children } = props
   const minColumns = props.minColumns ?? 1
+  const maxItemWidth = props.maxItemWidth ?? 0
   const aspect = props.mode === 'cards' ? props.itemAspect : 0
   const rowHeight = props.mode === 'rows' ? props.rowHeight : 0
   const minColumnWidth = props.mode === 'rows' ? props.minColumnWidth : 0
@@ -29,9 +32,13 @@ export function FitGrid(props: FitGridProps) {
     const element = ref.current
     if (!element) return
     const measure = (width: number, height: number) => {
+      const widthFloor = maxItemWidth
+        ? Math.max(1, Math.floor((width + gap) / (maxItemWidth + gap)))
+        : 1
       setColumns(
         Math.max(
           minColumns,
+          widthFloor,
           aspect
             ? fitCards(width, height, count, aspect, gap)
             : fitRows(width, height, count, rowHeight, minColumnWidth, gap),
@@ -45,7 +52,7 @@ export function FitGrid(props: FitGridProps) {
     observer.observe(element)
     measure(element.clientWidth, element.clientHeight)
     return () => observer.disconnect()
-  }, [count, aspect, rowHeight, minColumnWidth, gap, minColumns])
+  }, [count, aspect, rowHeight, minColumnWidth, gap, minColumns, maxItemWidth])
 
   return (
     <div

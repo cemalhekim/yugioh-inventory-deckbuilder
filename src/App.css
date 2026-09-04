@@ -14,6 +14,7 @@
   --kc-shadow: 0 0 28px rgba(45, 170, 255, 0.22);
   --deck-zone-gap: 10px;
   --history-row-height: 48px;
+  /* Overridden inline from the window size; these are the minimum layout. */
   --design-width: 1920px;
   --design-height: 1080px;
 }
@@ -634,8 +635,8 @@ button:disabled {
   align-content: start;
   display: grid;
   gap: 6px;
-  /* 6 across the 400px panel gives the same ~60px card as the deck zones. */
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* Same ~60px card as the deck zones, however wide the panel is. */
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   padding: 8px;
 }
 

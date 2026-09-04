@@ -93,8 +93,8 @@ const zoneLabels: Record<DeckZone, string> = {
 }
 
 const zoneOrder: DeckZone[] = ['main', 'extra', 'side']
-// Same card size in every zone: 15 across the deck panel on the 1920px canvas (~60px cards).
-const deckCardColumns = 15
+// Same small card everywhere: never wider than this, whatever the monitor.
+const deckCardMaxWidth = 62
 const cardmarketWantsUrl = 'https://www.cardmarket.com/en/YuGiOh/Wants'
 const cardmarketPayloadHashKey = 'ygo-inventory-wants'
 const cardDragDataType = 'application/ygo-card'
@@ -452,7 +452,8 @@ function App() {
   const initialKaibaDeckDirRef = useRef(kaibaDeckDir)
   const cardDragPreviewRef = useRef<HTMLDivElement | null>(null)
   const shellRef = useRef<HTMLElement>(null)
-  const appScale = useAppScale()
+  const viewport = useAppScale()
+  const appScale = viewport.scale
   useScrollLock()
 
   // Pointer coordinates arrive in window pixels; fixed-position menus inside
@@ -1471,7 +1472,11 @@ function App() {
     <main
       className="app-shell"
       ref={shellRef}
-      style={{ ['--app-scale' as string]: appScale }}
+      style={{
+        ['--app-scale' as string]: appScale,
+        ['--design-width' as string]: `${viewport.width}px`,
+        ['--design-height' as string]: `${viewport.height}px`,
+      }}
     >
       <header className="topbar">
         <div className="brand-block">
@@ -1776,7 +1781,7 @@ function App() {
                       count={deck[zone].reduce((sum, entry) => sum + entry.quantity, 0)}
                       gap={6}
                       itemAspect={0.686}
-                      minColumns={deckCardColumns}
+                      maxItemWidth={deckCardMaxWidth}
                       mode="cards"
                     >
                       {deck[zone].flatMap((entry) =>
